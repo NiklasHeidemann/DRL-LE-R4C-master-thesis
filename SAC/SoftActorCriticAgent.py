@@ -1,9 +1,14 @@
-from ExperienceReplayBuffer import ExperienceReplayBuffer
+from typing_extensions import override
+
+from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
 import tensorflow as tf
 from tensorflow import math as tfm
 from tensorflow_probability import distributions as tfd
 import numpy as np
 import datetime
+
+from agent import GridWorldAgent
+from grid_world import ACTIONS
 
 
 # input actions are always between (−1, 1)
@@ -16,7 +21,7 @@ def multiplicative_scaling(actions, factors):
     return actions * factors
 
 
-class Agent:
+class SACAgent(GridWorldAgent):
     """
     Soft Actor-Critic (SAC) Agent
     Based on pseudocode of OpenAI Spinning Up (2022) (https://spinningup.openai.com/en/latest/algorithms/sac.html)
@@ -44,11 +49,12 @@ class Agent:
     :param model_path: path to the location the model is saved and loaded from
     """
 
-    def __init__(self, environment, state_dim, action_dim,
+    def __init__(self, environment, agent_id: str, state_dim, action_dim,
                  actor_network_generator, critic_network_generator, action_scaling=default_scaling,
                  learning_rate=0.0003, gamma=0.99, tau=0.005, reward_scale=1, alpha=0.2,
                  batch_size=256, max_replay_buffer_size=1000000, model_path=""):
         self._environment = environment
+        self.agent_id = agent_id
         self._action_dim = action_dim
         self._action_scaling = action_scaling
         self._gamma = gamma
@@ -156,7 +162,8 @@ class Agent:
 
     def _act(self, actions):
         scaled_actions = self._action_scaling(actions)  # scaled actions from (-1, 1) according (to environment)
-        observation_prime, reward, done, truncated, _ = self._environment.step(scaled_actions[0])
+        selected_action = ACTIONS[np.argmax(scaled_actions)]
+        observation_prime, reward, done, truncated, _ = self._environment.step({self.agent_id: selected_action})
         return actions, observation_prime, reward, done or truncated
 
     def train(self, epochs, environment_steps_before_training=1, training_steps_per_update=1,
@@ -173,20 +180,23 @@ class Agent:
         :param save_models=False: Determines if the models are saved per epoch
         """
         print(f"Random exploration for {pre_sampling_steps} steps!")
-        observation, _ = self._environment.reset()
+        observation = self._environment.reset()[self.agent_id]
         ret = 0
         for _ in range(pre_sampling_steps):
-            actions, observation_prime, reward, done = self.act_stochastic(observation)
+            actions, new_observation_dict, reward_dict, done_dict = self.act_stochastic(observation)
+            done = done_dict[self.agent_id]
+            reward = reward_dict[self.agent_id]
+            new_observation = new_observation_dict[self.agent_id]
             ret += reward
-            self._reply_buffer.add_transition(observation, actions, reward, observation_prime, done)
+            self._reply_buffer.add_transition(state=observation, action=actions, reward=reward, state_=new_observation, done=done)
             if done:
                 ret = 0
-                observation, _ = self._environment.reset()
+                observation = self._environment.reset()[self.agent_id]
             else:
-                observation = observation_prime
+                observation = new_observation
         print("start training!")
         returns = []
-        observation, _ = self._environment.reset()
+        observation = self._environment.reset()[self.agent_id]
         done = 0
         ret = 0
         epoch = 0
@@ -196,7 +206,7 @@ class Agent:
             i = 0
             while i < environment_steps_before_training or self._reply_buffer.size() < self._batch_size:
                 if done or (max_environment_steps_per_epoch is not None and j >= max_environment_steps_per_epoch):
-                    observation, _ = self._environment.reset()
+                    observation = self._environment.reset()[self.agent_id]
                     returns.append(ret)
                     print("epoch:", epoch, "steps:", steps, "return:", ret, "avg return:", np.average(returns[-4:]))
                     if save_models:
@@ -206,12 +216,20 @@ class Agent:
                     if epoch >= epochs:
                         print("training finished!")
                         return
-                actions, observation_prime, reward, done = self.act_stochastic(observation)
-                self._reply_buffer.add_transition(observation, actions, reward, observation_prime, done)
-                observation = observation_prime
+                actions, new_observation_dict, reward_dict, done_dict = self.act_stochastic(observation)
+                done = done_dict[self.agent_id]
+                new_observation = new_observation_dict[self.agent_id]
+                reward = reward_dict[self.agent_id]
+                self._reply_buffer.add_transition(observation, actions, reward, new_observation, done)
+                observation = new_observation
                 steps += 1
                 ret += reward
                 i += 1
                 j += 1
             for _ in range(training_steps_per_update):
                 self.learn()
+
+    @override
+    def pick_action(self, state:np.ndarray) ->str:
+        actions, _ = self.sample_actions_form_policy(state=tf.convert_to_tensor([state], dtype=tf.float32))
+        return ACTIONS[np.argmax(actions)]
