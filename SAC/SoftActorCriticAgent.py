@@ -1,27 +1,22 @@
-from typing_extensions import override
+from collections import defaultdict
+import datetime
+from collections import defaultdict
+from threading import Thread
+from typing import List, Tuple, Dict
 
-from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
+import numpy as np
 import tensorflow as tf
 from tensorflow import math as tfm
 from tensorflow_probability import distributions as tfd
-import numpy as np
-import datetime
 
-from agent import GridWorldAgent
-from grid_world import ACTIONS
-
-
-# input actions are always between (−1, 1)
-def default_scaling(actions):
-    return actions
+from SAC.ExperienceReplayBuffer import RecurrentExperienceReplayBuffer
+from environment.render import render_permanently
+from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES
+from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS
+from plots import plot_multiple
 
 
-# input actions are always between (−1, 1)
-def multiplicative_scaling(actions, factors):
-    return actions * factors
-
-
-class SACAgent(GridWorldAgent):
+class SACAgent:
     """
     Soft Actor-Critic (SAC) Agent
     Based on pseudocode of OpenAI Spinning Up (2022) (https://spinningup.openai.com/en/latest/algorithms/sac.html)
@@ -34,10 +29,7 @@ class SACAgent(GridWorldAgent):
         signature: learning_rate, state_dim, action_dim -> tensorflow Model
     :param critic_network_generator: a generator function for the critic networks (Q-networks)
         signature: learning_rate, state_dim, action_dim -> tensorflow Model
-    :param action_scaling=default_scaling: function to scale the actions form (-1, 1)
-        to the range the environment requires
-        signature:  (action_tensor -> scaled_action_tensor)
-    :param learning_rate=0.0003: Learning rate for adam optimizer.
+    :param learning_rate=0.0003: Learning rate for adam optimizer. # todo testing by kl-divergence
         The same learning rate will be used for all networks (Q-Values, Actor)
     :param gamma=0.99: discount factor
     :param tau=0.005:  Polyak averaging coefficient (between 0 and 1)
@@ -48,15 +40,14 @@ class SACAgent(GridWorldAgent):
     :param max_replay_buffer_size=1000000: Size of the replay buffer
     :param model_path: path to the location the model is saved and loaded from
     """
-
-    def __init__(self, environment, agent_id: str, state_dim, action_dim,
-                 actor_network_generator, critic_network_generator, action_scaling=default_scaling,
-                 learning_rate=0.0003, gamma=0.99, tau=0.005, reward_scale=1, alpha=0.2,
-                 batch_size=256, max_replay_buffer_size=1000000, model_path=""):
+# todo cnn
+    def __init__(self, environment, self_play: bool, agent_ids: List[str], state_dim, action_dim,  from_save: bool,
+                 actor_network_generator, critic_network_generator, max_replay_buffer_size:int, recurrent: bool,
+                 learning_rate=LEARNING_RATE, gamma=1., tau=0.005, reward_scale=1, alpha=ALPHA,
+                 batch_size:int=BATCH_SIZE,  model_path="model/"):
         self._environment = environment
-        self.agent_id = agent_id
+        self._self_play = self_play
         self._action_dim = action_dim
-        self._action_scaling = action_scaling
         self._gamma = gamma
         self._tau = tau
         self._reward_scale = reward_scale
@@ -64,19 +55,20 @@ class SACAgent(GridWorldAgent):
         self._batch_size = batch_size
         self._mse = tf.keras.losses.MeanSquaredError()
         self._model_path = model_path
-        self._reply_buffer = ExperienceReplayBuffer(state_dim, action_dim, max_replay_buffer_size, batch_size)
-        self._actor = actor_network_generator(learning_rate)
-        self._critic_1 = critic_network_generator(learning_rate)
-        self._critic_2 = critic_network_generator(learning_rate)
-        self._critic_1_t = critic_network_generator(learning_rate)
-        self._critic_2_t = critic_network_generator(learning_rate)
-        self._wight_init()
-
-    def reply_buffer(self):
-        return self._reply_buffer
-
-    def environment(self):
-        return self._environment
+        self._reply_buffer = RecurrentExperienceReplayBuffer(state_dim, action_dim, agent_number=len(agent_ids), max_size=max_replay_buffer_size,batch_size= batch_size)
+        self._agent_ids = agent_ids
+        if self_play:
+            self._actor = actor_network_generator(learning_rate, recurrent=recurrent)
+        else:
+            self._actors = {agent_id: actor_network_generator(learning_rate, recurrent = recurrent) for agent_id in agent_ids}
+        self._critic_1 = critic_network_generator(learning_rate=learning_rate, agent_num=len(agent_ids), recurrent = recurrent)
+        self._critic_2 = critic_network_generator(learning_rate=learning_rate, agent_num=len(agent_ids), recurrent = recurrent)
+        self._critic_1_t = critic_network_generator(learning_rate=learning_rate, agent_num=len(agent_ids), recurrent = recurrent)
+        self._critic_2_t = critic_network_generator(learning_rate=learning_rate, agent_num=len(agent_ids), recurrent = recurrent)
+        if from_save:
+            self.load_models(name="")
+        else:
+            self._wight_init()
 
     def save_models(self, name):
         self._actor.save_weights(f"{self._model_path}actor{name}")
@@ -105,67 +97,6 @@ class SACAgent(GridWorldAgent):
         for w_t, w in zip(target_network.weights, network.weights):
             new_wights.append((1 - self._tau) * w_t + self._tau * w)
         target_network.set_weights(new_wights)
-
-    def learn(self):
-        states, actions, rewards, states_prime, dones = self._reply_buffer.sample_batch()
-        self.train_step_critic(states, actions, rewards, states_prime, dones)
-        self.train_step_actor(states)
-        self.update_target_weights()
-
-    @tf.function
-    def train_step_critic(self, states, actions, rewards, states_prime, dones):
-        actions_prime, log_probs = self.sample_actions_form_policy(states_prime)
-        q1 = self._critic_1_t((states_prime, actions_prime))
-        q2 = self._critic_2_t((states_prime, actions_prime))
-        q_r = tfm.minimum(q1, q2) - self._alpha * log_probs
-        targets = self._reward_scale * rewards + self._gamma * (1 - dones) * q_r
-        self._critic_update(self._critic_1, states, actions, targets)
-        self._critic_update(self._critic_2, states, actions, targets)
-
-    def _critic_update(self, critic, states, actions, targets):
-        with tf.GradientTape() as tape:
-            q = critic((states, actions))
-            loss = 0.5 * self._mse(targets, q)
-        gradients = tape.gradient(loss, critic.trainable_variables)
-        critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
-
-    @tf.function
-    def train_step_actor(self, states):
-        with tf.GradientTape() as tape:
-            actions_new, log_probs = self.sample_actions_form_policy(states)
-            q1 = self._critic_1((states, actions_new))
-            q2 = self._critic_2((states, actions_new))
-            loss = tfm.reduce_mean(self._alpha * log_probs - tfm.minimum(q1, q2))
-            # equal to loss = -tfm.reduce_mean(tfm.minimum(q1, q2) - self._alpha * log_probs)
-        gradients = tape.gradient(loss, self._actor.trainable_variables)
-        self._actor.optimizer.apply_gradients(zip(gradients, self._actor.trainable_variables))
-
-    @tf.function
-    def sample_actions_form_policy(self, state):
-        mu, sigma = self._actor(state)
-        # MultivariateNormalDiag(loc=mus, scale_diag=sigmas) other option
-        distribution = tfd.Normal(mu, sigma)
-        actions = distribution.sample()
-        log_probs = distribution.log_prob(actions)
-        actions = tfm.tanh(actions)
-        log_probs -= tfm.log(1 - tfm.pow(actions, 2) + 1e-6)  # + 1e-6 because log undefined for 0
-        log_probs = tfm.reduce_sum(log_probs, axis=-1, keepdims=True)
-        return actions, log_probs
-
-    def act_deterministic(self, state):
-        actions_prime, _ = self._actor(tf.convert_to_tensor([state], dtype=tf.float32))
-        return self._act(actions_prime)
-
-    def act_stochastic(self, state):
-        actions_prime, _ = self.sample_actions_form_policy(tf.convert_to_tensor([state], dtype=tf.float32))
-        return self._act(actions_prime)
-
-    def _act(self, actions):
-        scaled_actions = self._action_scaling(actions)  # scaled actions from (-1, 1) according (to environment)
-        selected_action = ACTIONS[np.argmax(scaled_actions)]
-        observation_prime, reward, done, truncated, _ = self._environment.step({self.agent_id: selected_action})
-        return actions, observation_prime, reward, done or truncated
-
     def train(self, epochs, environment_steps_before_training=1, training_steps_per_update=1,
               max_environment_steps_per_epoch=None, pre_sampling_steps=1024, save_models=False):
         """
@@ -179,57 +110,235 @@ class SACAgent(GridWorldAgent):
         :param pre_sampling_steps=1024: Number of exploration steps sampled to the replay buffer before training starts
         :param save_models=False: Determines if the models are saved per epoch
         """
-        print(f"Random exploration for {pre_sampling_steps} steps!")
-        observation = self._environment.reset()[self.agent_id]
-        ret = 0
-        for _ in range(pre_sampling_steps):
-            actions, new_observation_dict, reward_dict, done_dict = self.act_stochastic(observation)
-            done = done_dict[self.agent_id]
-            reward = reward_dict[self.agent_id]
-            new_observation = new_observation_dict[self.agent_id]
-            ret += reward
-            self._reply_buffer.add_transition(state=observation, action=actions, reward=reward, state_=new_observation, done=done)
-            if done:
-                ret = 0
-                observation = self._environment.reset()[self.agent_id]
-            else:
-                observation = new_observation
+        self._pre_sample(pre_sampling_steps=pre_sampling_steps)
         print("start training!")
-        returns = []
-        observation = self._environment.reset()[self.agent_id]
-        done = 0
+        self._loss_logger = LossLogger()
+        self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES], smoothed=100)
+        self._loss_logger.add_lists([RETURNS], smoothed=1000)
+        return_dict = defaultdict(float)
+        observation_dict = self._environment.reset()
+        action_probs = defaultdict(lambda: np.zeros(shape=(1,len(ACTIONS))))
+        done_dict = {"" :False}
         ret = 0
         epoch = 0
         steps = 0
         j = 0
+        render_save = []
+        last_render_as_list = []
+        thread = Thread(target=render_permanently, args=[last_render_as_list])
+        thread.start()
         while True:
             i = 0
             while i < environment_steps_before_training or self._reply_buffer.size() < self._batch_size:
-                if done or (max_environment_steps_per_epoch is not None and j >= max_environment_steps_per_epoch):
-                    observation = self._environment.reset()[self.agent_id]
-                    returns.append(ret)
-                    print("epoch:", epoch, "steps:", steps, "return:", ret, "avg return:", np.average(returns[-4:]))
+                if epoch%10==0:
+                    render_save.append((self._environment.render(),action_probs))
+                if False not in done_dict.values() or (max_environment_steps_per_epoch is not None and j >= max_environment_steps_per_epoch):
+                    if epoch%10==0:
+                        print("epoch:", epoch, "steps:", steps, "actor-loss: {:.2f}".format(self._loss_logger.last(ACTOR_LOSS)), "critic-loss: {:.2f}".format(self._loss_logger.last(CRITIC_LOSS)), "return: {:.2f}".format(self._loss_logger.last(RETURNS)), "avg return: {:.2f}".format(self._loss_logger.avg_last(RETURNS, 10)))
+                        last_render_as_list.append(render_save)
+                        render_save = []
+                        if len(last_render_as_list)>1:
+                            last_render_as_list.pop(0)
+                    observation_dict = self._environment.reset()
+                    self._loss_logger.add_value(identifier=RETURNS,value=ret)
                     if save_models:
                         self.save_models(f"SAC_{epoch}_{steps}_{ret}_{datetime.datetime.now()}")
                     ret = 0
+                    return_dict = defaultdict(float)
                     epoch += 1
+                    if epoch % 1000 == 0:
+                        self.test(n_samples=20, verbose_samples=0)
+                    if epoch%1000==0 or epoch>=epochs:
+                        self.save_models(name="")
+                    if epoch%1000==0 or epoch >=epochs:
+                        thread = Thread(target=plot_multiple,args=[self._loss_logger.all_smoothed()])
+                        thread.start()
                     if epoch >= epochs:
                         print("training finished!")
                         return
-                actions, new_observation_dict, reward_dict, done_dict = self.act_stochastic(observation)
-                done = done_dict[self.agent_id]
-                new_observation = new_observation_dict[self.agent_id]
-                reward = reward_dict[self.agent_id]
-                self._reply_buffer.add_transition(observation, actions, reward, new_observation, done)
-                observation = new_observation
+                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self.act_stochastic(observation_dict)
+                self._reply_buffer.add_transition(state=observation_dict, action=actions_dict, reward=reward_dict, state_=new_observation_dict, done=done_dict)
+                observation_dict = new_observation_dict
                 steps += 1
-                ret += reward
+                ret += sum(reward_dict.values())
+                return_dict = {key: return_dict[key]+reward_dict[key] for key in reward_dict.keys()}
                 i += 1
                 j += 1
             for _ in range(training_steps_per_update):
                 self.learn()
 
-    @override
+    def learn(self)->None:
+        for _ in range(TRAININGS_PER_TRAINING):
+            states, actions, rewards, states_prime, dones = self._reply_buffer.sample_batch()
+            critic_loss, log_probs = self.train_step_critic(
+                states=tf.reshape(tensor=states,shape=(self._batch_size,len(self._agent_ids),TIME_STEPS, -1)),
+                actions=tf.reshape(tensor=actions,shape=(self._batch_size, -1)),
+                rewards=tf.reshape(tensor=rewards, shape=(self._batch_size, -1)),
+                states_prime=tf.reshape(tensor=states_prime,shape=(self._batch_size,len(self._agent_ids),TIME_STEPS, -1)),
+                dones=tf.reshape(tensor=dones, shape=(self._batch_size, -1)),
+                )
+            self.update_target_weights()
+            actor_loss, q_values = self.train_step_actor(states)
+            self._loss_logger.add_aggregatable_values({CRITIC_LOSS: critic_loss, LOG_PROBS:log_probs, ACTOR_LOSS: actor_loss, Q_VALUES: q_values})
+        self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES])
+
+    @tf.function
+    def sample_actions_prime_and_log_probs_from_policy(self, states):
+        states_prime_dict = {agent_id: states[:, index,:,:] for index, agent_id in enumerate(self._agent_ids)}
+        actions_prime, action_probs, log_probs = [
+            tf.reshape(list_,shape=(-1,len(self._agent_ids),len(ACTIONS))) for list_ in
+            #tf.concat(values=list_,axis=1) for list_ in
+            zip(*[self.sample_actions_from_policy(state=states_prime_dict[agent_id], agent_id=agent_id) for agent_id in
+                  self._agent_ids])
+        ]
+        return actions_prime, action_probs, log_probs
+
+    @tf.function
+    def train_step_critic(self, states, actions, rewards, states_prime, dones):
+        _, action_probs, log_probs = self.sample_actions_prime_and_log_probs_from_policy(states=states_prime)
+        flattened_states_prime = tf.reshape(states_prime,shape=(BATCH_SIZE, TIME_STEPS, -1))
+        flattened_states = tf.reshape(states,shape=(BATCH_SIZE, TIME_STEPS, -1))
+        q1 = tf.reshape(self._critic_1_t(flattened_states_prime),shape=action_probs.shape)
+        q2 = tf.reshape(self._critic_2_t(flattened_states_prime),shape=action_probs.shape)
+        q_r = tfm.minimum(q1, q2) - self._alpha * log_probs
+        q_r_mean = tf.math.reduce_sum(action_probs * q_r, axis=2, keepdims=True)
+        targets =  self._reward_scale * tf.reshape(rewards,q_r_mean.shape) + self._gamma * (1 - tf.reshape(dones,q_r_mean.shape)) * q_r_mean
+        loss_1 = self._critic_update(self._critic_1, flattened_states, actions, targets)
+        loss_2 = self._critic_update(self._critic_2, flattened_states, actions, targets)
+        return tf.add(loss_1, loss_2), log_probs
+
+    def _critic_update(self, critic, states, actions, targets):
+        with tf.GradientTape() as tape:
+            q = tf.reduce_sum(tf.reshape(critic(states)*actions,shape=(-1,len(self._agent_ids), len(ACTIONS))),axis=2)
+            loss = 0.5 * self._mse(targets, q)
+        gradients = tape.gradient(loss, critic.trainable_variables)
+        critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
+        return loss
+
+    @tf.function
+    def train_step_actor(self, states)->Tuple[float,float]:
+        losses = []
+        q_values = []
+        reshaped_states = tf.reshape(states, shape=(BATCH_SIZE, TIME_STEPS, -1))
+        for index, id in enumerate(self._agent_ids):
+            actor = self._get_actor(agent_id=id)
+            with tf.GradientTape() as tape:
+                _, actions_probs, log_probs = self.sample_actions_prime_and_log_probs_from_policy(states = states)
+                q1 = self._critic_1(reshaped_states)[:,index * len(ACTIONS):(index + 1) * len(ACTIONS)]
+                q2 = self._critic_2(reshaped_states)[:,index*len(ACTIONS):(index+1)*len(ACTIONS)]
+                losses.append(tfm.reduce_mean(actions_probs[:,index] * (self._alpha * log_probs[:,index] - tfm.minimum(q1, q2))))
+                q_values.append(tfm.reduce_mean(tfm.minimum(q1, q2)))
+            # equal to loss = -tfm.reduce_mean(tfm.minimum(q1, q2) - self._alpha * log_probs)
+            gradients = tape.gradient(losses[-1], actor.trainable_variables)
+            actor.optimizer.apply_gradients(zip(gradients, actor.trainable_variables))
+        return tf.reduce_mean(losses), tf.reduce_mean(q_values)
+    @tf.function
+    def sample_actions_from_policy(self, state, agent_id: str):
+
+        #mu, sigma = self._get_actor(agent_id=agent_id)(state)
+        #distribution = tfd.Normal(mu, sigma)
+        #actions = distribution.sample()
+        #log_probs = distribution.log_prob(actions)
+        #actions = tfm.tanh(actions)
+        #log_probs -= tfm.log(1 - tfm.pow(actions, 2) + 1e-6)  # + 1e-6 because log undefined for 0
+        #log_probs = tfm.reduce_sum(log_probs, axis=-1, keepdims=True)
+        probabilities = self._get_actor(agent_id=agent_id)(state)
+        distribution = tfd.Categorical(probabilities)
+        actions = distribution.sample()
+        return tf.one_hot(actions,depth=len(ACTIONS)), probabilities, tf.math.log(probabilities)
+
+    def _get_actor(self, agent_id: str) -> tf.keras.Model:
+        return self._actor if self._self_play else self._actors[agent_id]
+    def act_deterministic(self, state):
+        actions_prime = {}
+        probabilities = {}
+        for agent_id in self._agent_ids:
+            probabilities[agent_id] = self._get_actor(agent_id=agent_id)(tf.convert_to_tensor([state[agent_id]], dtype=tf.float32))
+            actions_prime[agent_id] = tf.one_hot(tf.argmax(probabilities[agent_id]),depth=len(ACTIONS))
+        return self._act(actions_prime), probabilities
+
+    def act_stochastic(self, state) -> Tuple[Tuple, Dict[str, np.ndarray]]:
+        #agent_to_act_stochastic = random.randint(0,len(self._agent_ids)-1)
+        actions_prime = {agent_id:
+                             (self.sample_actions_from_policy(tf.convert_to_tensor([state[agent_id]], dtype=tf.float32), agent_id=agent_id)
+         #                if index == agent_to_act_stochastic else
+          #               self._get_actor(agent_id=agent_id)(tf.convert_to_tensor([state[agent_id]], dtype=tf.float32))[0]
+                              )
+                         for index, agent_id in enumerate(self._agent_ids)}
+        return self._act({key: action[0] for key, action in actions_prime.items()}), {key: action[1] for key, action in actions_prime.items()}
+
+    def act_perfect(self, state):
+        actions_prime = {agent_id: [np.array([
+            2. if (state[agent_id][4]) ==1 else 0.,# hold
+            1. if (state[agent_id][5])==1 else (0.5 if 1 in [(state[agent_id][index]) for index in [2,8,12]] else 0.),#left
+            1. if (state[agent_id][3])==1 else (0.5 if 1 in [(state[agent_id][index]) for index in [0,6,11]] else 0.),#right
+            1. if (state[agent_id][7])==1 else (0.5 if (state[agent_id][10])==1 else 0.),#up
+            1. if (state[agent_id][1])==1 else (0.5 if (state[agent_id][9])==1 else 0.),#down
+            0.1,#jump
+            0,
+            0,
+            0,
+            0,
+            0,
+        ]
+        )] for agent_id in self._agent_ids}
+        return self._act(actions_prime)
+    def _select_communication(self, communication: np.ndarray)->np.ndarray:
+        number_channels = self._environment.stats.number_communication_channels
+        vocab_size =self._environment.stats.size_vocabulary
+        base_array = np.zeros(shape=(number_channels*vocab_size))
+        for base_index in range(0, len(base_array), vocab_size+1):
+            if communication[base_index]>0:
+                index = np.argmax(communication[base_index+1:base_index+2+vocab_size])
+                base_array[base_index+index] = 1
+        return base_array
+    def _act(self, all_actions):
+        communications = {agent_id: action[0][len(ACTIONS):] for agent_id, action in all_actions.items()}
+        selected_communications = {agent_id: self._select_communication(communication=com) for agent_id, com in communications.items()}
+        selected_actions = {agent_id: ACTIONS[np.argmax(action[0][:len(ACTIONS)])] for agent_id, action in all_actions.items()}
+        actions_dict = {agent_id: (selected_actions[agent_id], selected_communications[agent_id]) for agent_id in all_actions.keys()}
+        observation_prime, reward, done, truncated, _ = self._environment.step(actions_dict)
+        return all_actions, observation_prime, reward, {agent_id: done[agent_id] or truncated[agent_id] for agent_id in self._agent_ids}
+
+    def _pre_sample(self, pre_sampling_steps: int):
+        print(f"Random exploration for {pre_sampling_steps} steps!")
+        observation_dict = self._environment.reset()
+        ret = 0
+        for _ in range(pre_sampling_steps):
+            (actions_dict, new_observation_dict, reward_dict, done_dict), _ = self.act_stochastic(observation_dict)
+            ret += sum(reward_dict.values())
+            self._reply_buffer.add_transition(state=observation_dict, action=actions_dict, reward=reward_dict, state_=new_observation_dict, done=done_dict)
+            if False not in done_dict.values():
+                ret = 0
+                observation_dict = self._environment.reset()
+            else:
+                observation_dict = new_observation_dict
+    def test(self, n_samples: int, verbose_samples: int):
+        returns = []
+        render_save = []
+        for index in range(n_samples):
+            observation_dict = self._environment.reset()
+            action_probs = defaultdict(lambda: np.zeros(shape=(1,len(ACTIONS))))
+            return_ = 0
+            while True:
+                if index< verbose_samples:
+                    render_save.append((self._environment.render(),action_probs))
+                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self.act_deterministic(observation_dict)
+                if index<verbose_samples:
+                    print(actions_dict)
+                return_ += sum(reward_dict.values())
+                if False not in done_dict.values():
+                    returns.append(return_)
+                    if index< verbose_samples:
+                        render_save.append(self._environment.render())
+                    print(f"Finished test episode {index} with a return of {return_} after {self._environment.stats.time_step} time steps.")
+                    break
+                observation_dict = new_observation_dict
+            #if index == 0:
+            #    thread = Thread(target=render_episode,args=[render_save])
+            #    thread.start()
+        print(f"The average return is {np.mean(returns)}")
+
     def pick_action(self, state:np.ndarray) ->str:
-        actions, _ = self.sample_actions_form_policy(state=tf.convert_to_tensor([state], dtype=tf.float32))
+        actions, _ = self.sample_actions_from_policy(state=tf.convert_to_tensor([state], dtype=tf.float32))
         return ACTIONS[np.argmax(actions)]
