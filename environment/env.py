@@ -17,7 +17,7 @@ from environment.stats import Stats
 from environment.reward import ComputeReward
 
 RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], int]
-RenderSaveExtended = Tuple[RenderSave, np.ndarray]
+RenderSaveExtended = Tuple[RenderSave, np.ndarray, Dict[AgentID, Tuple[float,float]]]
 
 class CoopGridWorld(ParallelEnv):
     _grid: np.ndarray = None

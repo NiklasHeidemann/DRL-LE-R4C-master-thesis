@@ -1,7 +1,7 @@
 .idea
 *.png
-.model
-.logs
+model
+logs
 
 # Created by https://www.toptal.com/developers/gitignore/
 

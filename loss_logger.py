@@ -3,10 +3,12 @@ from typing import List, Any, Optional, Dict
 import numpy as np
 
 ACTOR_LOSS = "actor_losses"
+OTHER_ACTOR_LOSS = "other_actor_losses"
 CRITIC_LOSS = "critic_losses"
 LOG_PROBS = "log_probs"
 RETURNS = "returns"
 Q_VALUES = "q_values"
+MAX_Q_VALUES = "max_q_values"
 
 class LossLogger:
 

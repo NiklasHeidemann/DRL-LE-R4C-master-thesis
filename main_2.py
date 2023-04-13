@@ -5,7 +5,7 @@ from SAC.GenericMLPs1D import create_policy_network, create_q_network
 from SAC.SoftActorCriticAgent import SACAgent
 from environment.env import CoopGridWorld
 from environment.generator import RandomWorldGenerator
-from environment.reward import TwoCoopComputeReward, SingleComputeReward
+from environment.reward import TwoCoopComputeReward, SingleComputeReward, AtLeastOneComputeReward, FirstOneComputeReward
 import tensorflow as tf
 import matplotlib
 
@@ -19,7 +19,7 @@ matplotlib.use("agg")
 random.seed(SEED)
 tf.random.set_seed(SEED)
 
-compute_reward = SingleComputeReward() if NUMBER_OF_AGENTS == 1 else TwoCoopComputeReward()
+compute_reward = SingleComputeReward() if NUMBER_OF_AGENTS == 1 else FirstOneComputeReward()
 
 env = CoopGridWorld(generator=RandomWorldGenerator(seed=SEED), compute_reward=compute_reward)
 env.stats.max_time_step = MAX_TIME_STEP

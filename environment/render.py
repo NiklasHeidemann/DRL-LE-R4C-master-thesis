@@ -1,8 +1,7 @@
 import os
 import time
 from pathlib import Path
-from time import sleep
-from typing import Mapping, Tuple, List
+from typing import Mapping, Tuple, List, Dict
 
 import pygame
 import numpy as np
@@ -13,7 +12,7 @@ from params import ACTIONS
 
 window = pygame.display.set_mode((1000, 500))
 pygame.font.init()
-def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index: int):
+def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index: int, max_q_value: Dict[str, Tuple[float,float]]):
     grid, agent_positions, last_agent_movements, timestep = save
     global window
     background_color = (0, 0, 0)
@@ -39,6 +38,10 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
     for index, (id, movement) in enumerate(last_agent_movements.items()):
         text_field = my_font.render(f"{id}:     {movement}", True, background_color)
         window.blit(text_field, (550,(index+1)*100+20))
+        text_field = my_font.render("max_q_val:   {:.2f}".format(max_q_value[id][0]), True, background_color)
+        window.blit(text_field, (550, (index+1)*100+40))
+        text_field = my_font.render(f"best_act:   {ACTIONS[max_q_value[id][1]]}", True, background_color)
+        window.blit(text_field, (550, (index+1)*100+60))
         for action_index in range(len(ACTIONS)):
             text_field = my_font.render(f"{ACTIONS[action_index]}:     {'{:.2f}'.format(action_probs[id][0][action_index])}", True, background_color)
             window.blit(text_field, (750, (index+1)*100+20+action_index*20))
@@ -48,9 +51,10 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
 def render_episode(render_saves: List[RenderSaveExtended], name:str)->None:
     log_dir = f"logs/{name}"
     os.mkdir(log_dir)
-    for index, (save, action_probs) in enumerate(render_saves):
-        render(save=save, action_probs=action_probs, name=name, episode_index=index)
-        sleep(0.4)
+    for index, (save, action_probs, max_q_value) in enumerate(render_saves):
+        render(save=save, action_probs=action_probs, name=name, episode_index=index, max_q_value=max_q_value)
+        for _ in range(40):
+            time.sleep(0.01)
 
 def render_permanently(render_saves_as_list: List[List[RenderSaveExtended]])->None:
     clean_logs()
