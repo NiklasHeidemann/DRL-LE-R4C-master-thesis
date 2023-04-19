@@ -36,5 +36,6 @@ sac_agent = Trainer(environment=env, from_save=FROM_SAVE, self_play=SELF_PLAY, a
                                                       action_dim=env.stats.action_dimension, number_of_big_layers=NUMBER_OF_BIG_LAYERS))
 sac_agent._agent._critic_1.summary()
 sac_agent._agent._actor.summary() if SELF_PLAY else sac_agent._agent._actors["0"].summary()
+sac_agent.test(n_samples=20, verbose_samples=0)
 sac_agent.train(epochs=EPOCHS, pre_sampling_steps=PRE_SAMPLING_STEPS, environment_steps_before_training=ENVIRONMENT_STEPS_PER_TRAINING)
 sac_agent.test(n_samples=20, verbose_samples=0)

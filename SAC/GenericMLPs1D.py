@@ -4,7 +4,7 @@ from keras.layers import LSTM, Reshape
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Dense, Concatenate
 
-from params import LAYER_SIZE, TIME_STEPS, LSTM_SIZE
+from params import LAYER_SIZE, TIME_STEPS, LSTM_SIZE, NUMBER_COMMUNICATION_CHANNELS, SIZE_VOCABULARY, ACTIONS
 
 
 def create_policy_network(learning_rate, state_dim, action_dim, number_of_big_layers: int = 3, recurrent: bool=False):
@@ -18,8 +18,9 @@ def create_policy_network(learning_rate, state_dim, action_dim, number_of_big_la
         x = Dense(LAYER_SIZE, activation=tf.nn.relu)(x)
     #mu = Dense(action_dim, activation=None)(x)
     #sigma = Dense(action_dim, activation=tf.nn.softplus)(x)
-    output = Dense(action_dim, activation=tf.nn.softmax)(x)
-    model = keras.Model(inputs=inputs, outputs=output)
+    action_output = Dense(len(ACTIONS), activation=tf.nn.softmax)(x)
+    com_channel_outputs = [Dense(SIZE_VOCABULARY + 1, activation = tf.nn.softmax)(x) for _ in range(NUMBER_COMMUNICATION_CHANNELS)]
+    model = keras.Model(inputs=inputs, outputs=[action_output] + com_channel_outputs)
     model.compile(optimizer=Adam(learning_rate=learning_rate))
     return model
 

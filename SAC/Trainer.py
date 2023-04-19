@@ -13,8 +13,8 @@ from SAC.ExperienceReplayBuffer import RecurrentExperienceReplayBuffer
 from SAC.SACagent import SACAgent
 from environment.render import render_permanently
 from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, OTHER_ACTOR_LOSS, \
-    MAX_Q_VALUES
-from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA
+    MAX_Q_VALUES, ALPHA_VALUES, ENTROPY
+from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA, TARGET_ENTROPY
 from plots import plot_multiple
 
 
@@ -47,12 +47,12 @@ class Trainer:
     def __init__(self, environment, self_play: bool, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, max_replay_buffer_size: int, recurrent: bool,
                  learning_rate=LEARNING_RATE, gamma=GAMMA, tau=0.005, reward_scale=1, alpha=ALPHA,
-                 batch_size: int = BATCH_SIZE, model_path="model/"):
+                 batch_size: int = BATCH_SIZE, model_path="model/", target_entropy=TARGET_ENTROPY):
         self._loss_logger = LossLogger()
         self._replay_buffer = RecurrentExperienceReplayBuffer(state_dim, action_dim, agent_number=len(agent_ids),
                                                              max_size=max_replay_buffer_size, batch_size=batch_size)
         self._agent = SACAgent(environment=environment, loss_logger=self._loss_logger, replay_buffer=self._replay_buffer, self_play=self_play, agent_ids=agent_ids, action_dim=action_dim,actor_network_generator=actor_network_generator,
-                               critic_network_generator=critic_network_generator, recurrent=recurrent, learning_rate=learning_rate, gamma=gamma, tau=tau, reward_scale=reward_scale, alpha=alpha,batch_size=batch_size,model_path=model_path)
+                               critic_network_generator=critic_network_generator, recurrent=recurrent, learning_rate=learning_rate, gamma=gamma, tau=tau, reward_scale=reward_scale, alpha=alpha,batch_size=batch_size,model_path=model_path, target_entropy=target_entropy)
         self._environment = environment
         self._batch_size = batch_size
         self._agent_ids = agent_ids
@@ -74,6 +74,7 @@ class Trainer:
         self._pre_sample(pre_sampling_steps=pre_sampling_steps)
         print("start training!")
         self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
+        self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
         self._loss_logger.add_lists([RETURNS], smoothed=1000)
         return_dict = defaultdict(float)
         observation_dict = self._environment.reset()
@@ -120,8 +121,8 @@ class Trainer:
                     if epoch >= epochs:
                         print("training finished!")
                         return
-                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act_stochastic(
-                    observation_dict)
+                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act(
+                    observation_dict,deterministic=False)
                 self._replay_buffer.add_transition(state=observation_dict, action=actions_dict, reward=reward_dict,
                                                   state_=new_observation_dict, done=done_dict)
                 observation_dict = new_observation_dict
@@ -136,7 +137,8 @@ class Trainer:
     def learn(self) -> None:
         for _ in range(TRAININGS_PER_TRAINING):
             states, actions, rewards, states_prime, dones = self._replay_buffer.sample_batch()
-            critic_loss, log_probs = self._agent.train_step_critic(
+            actor_loss, q_values, max_q_values = self._agent.train_step_actor(states)
+            critic_loss, log_probs, entropy = self._agent.train_step_critic(
                 states=tf.reshape(tensor=states, shape=self.extended_shape),
                 actions=tf.reshape(tensor=actions, shape=(
                     self._batch_size, len(self._agent_ids) * self._environment.stats.action_dimension)),
@@ -144,12 +146,12 @@ class Trainer:
                 states_prime=tf.reshape(tensor=states_prime, shape=self.extended_shape),
                 dones=tf.reshape(tensor=dones, shape=(self._batch_size, len(self._agent_ids))),
             )
+            self._agent.train_step_temperature(states)
             self._agent.update_target_weights()
-            actor_loss, q_values, max_q_values = self._agent.train_step_actor(states)
             self._loss_logger.add_aggregatable_values(
                 {CRITIC_LOSS: critic_loss, LOG_PROBS: log_probs, ACTOR_LOSS: actor_loss, Q_VALUES: q_values,
-                 MAX_Q_VALUES: max_q_values})
-        self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES, MAX_Q_VALUES])
+                 MAX_Q_VALUES: max_q_values, ENTROPY: entropy})
+        self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES, MAX_Q_VALUES, ENTROPY])
 
     # todo free-for-all szenarien
     # todo relatedwork section skizzieren
@@ -160,7 +162,7 @@ class Trainer:
         observation_dict = self._environment.reset()
         ret = 0
         for _ in range(pre_sampling_steps):
-            (actions_dict, new_observation_dict, reward_dict, done_dict), _ = self._agent.act_stochastic(observation_dict)
+            (actions_dict, new_observation_dict, reward_dict, done_dict), _ = self._agent.act(observation_dict, deterministic=False)
             ret += sum(reward_dict.values())
             self._replay_buffer.add_transition(state=observation_dict, action=actions_dict, reward=reward_dict,
                                               state_=new_observation_dict, done=done_dict)
@@ -180,8 +182,8 @@ class Trainer:
             while True:
                 if index < verbose_samples:
                     render_save.append((self._environment.render(), action_probs))
-                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act_deterministic(
-                    observation_dict)
+                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act(
+                    observation_dict,deterministic=True)
                 if index < verbose_samples:
                     print(actions_dict)
                 return_ += sum(reward_dict.values())

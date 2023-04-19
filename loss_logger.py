@@ -9,6 +9,8 @@ LOG_PROBS = "log_probs"
 RETURNS = "returns"
 Q_VALUES = "q_values"
 MAX_Q_VALUES = "max_q_values"
+ALPHA_VALUES = "alpha"
+ENTROPY = "entropy"
 
 class LossLogger:
 

@@ -1,17 +1,13 @@
-import datetime
-from collections import defaultdict
-from threading import Thread
+from functools import partial
 from typing import List, Tuple, Dict
 
 import numpy as np
 import tensorflow as tf
 from tensorflow import math as tfm
 
-from SAC.ExperienceReplayBuffer import RecurrentExperienceReplayBuffer, ExperienceReplayBuffer
-from environment.render import render_permanently
-from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, MAX_Q_VALUES
-from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA
-from plots import plot_multiple
+from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
+from loss_logger import LossLogger, ALPHA_VALUES
+from params import ACTIONS, TIME_STEPS, SIZE_VOCABULARY
 
 
 class SACAgent:
@@ -39,11 +35,10 @@ class SACAgent:
     :param model_path: path to the location the model is saved and loaded from
     """
 
-    # todo cnn
     def __init__(self, environment, loss_logger: LossLogger, replay_buffer: ExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
                  actor_network_generator, critic_network_generator, recurrent: bool,
                  learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float,
-                 batch_size: int , model_path: str):
+                 batch_size: int , model_path: str, target_entropy: float):
         self._environment = environment
         self._loss_logger = loss_logger
         self._self_play = self_play
@@ -53,6 +48,8 @@ class SACAgent:
         self._reward_scale = reward_scale
         self._alpha = alpha
         self._batch_size = batch_size
+        self._learning_rate = learning_rate
+        self._target_entropy = target_entropy
         self._mse = tf.keras.losses.MeanSquaredError()
         self._model_path = model_path
         self._reply_buffer = replay_buffer
@@ -76,7 +73,7 @@ class SACAgent:
         reshaped_states = tf.reshape(np.array(list(states.values())), shape=(
             1, TIME_STEPS, self._environment.stats.observation_dimension * len(self._agent_ids)))
         q = (tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)))
-        q_by_agent = tf.reshape(q, shape=(len(self._agent_ids), len(ACTIONS)))
+        q_by_agent = tf.reshape(q, shape=(len(self._agent_ids), self._environment.stats.action_dimension))
         max_q_values = np.max(q_by_agent, axis=1)
         max_q_actions = np.argmax(q_by_agent, axis=1)
         return {agent_id: (max_q_value, max_q_action) for agent_id, max_q_value, max_q_action in
@@ -121,9 +118,9 @@ class SACAgent:
 
     @tf.function
     def train_step_critic(self, states, actions, rewards, states_prime, dones):
-        _, action_probs, log_probs = self.sample_actions_prime_and_log_probs_from_policy(tf.reshape(states_prime,
+        _, action_probs, log_probs = self.sample_actions(tf.reshape(states_prime,
                                                                                                     shape=(
-                                                                                                    BATCH_SIZE * len(
+                                                                                                    self._batch_size * len(
                                                                                                         self._agent_ids),
                                                                                                     TIME_STEPS,
                                                                                                     self._environment.stats.observation_dimension)),
@@ -138,12 +135,13 @@ class SACAgent:
                 1 - tf.reshape(dones, q_r_mean.shape)) * q_r_mean
         loss_1 = self._critic_update(self._critic_1, flattened_states, actions, targets)
         loss_2 = self._critic_update(self._critic_2, flattened_states, actions, targets)
-        return tf.add(loss_1, loss_2), log_probs
+        entropy = -tf.reduce_mean(tf.reduce_sum(action_probs * log_probs, axis=1))
+        return tf.add(loss_1, loss_2), log_probs, entropy
 
     def _critic_update(self, critic, states, actions, targets):
         with tf.GradientTape() as tape:
             q = tf.reduce_sum(
-                tf.reshape(critic(states) * actions, shape=(BATCH_SIZE * len(self._agent_ids), len(ACTIONS))), axis=1)
+                tf.reshape(critic(states) * actions, shape=(self._batch_size * len(self._agent_ids), self._environment.stats.action_dimension)), axis=1)
             loss = 0.5 * self._mse(targets, q)
         gradients = tape.gradient(loss, critic.trainable_variables)
         critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
@@ -155,9 +153,9 @@ class SACAgent:
         if self._self_play:
             actor = self._actor
             with tf.GradientTape() as tape:
-                _, action_probs, log_probs = self.sample_actions_prime_and_log_probs_from_policy(
+                _, action_probs, log_probs = self.sample_actions(
                     states=tf.reshape(states, shape=(
-                    BATCH_SIZE * len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)),
+                    self._batch_size * len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)),
                     actor=actor)
                 q = tf.reshape(tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)),
                                shape=action_probs.shape)
@@ -170,32 +168,24 @@ class SACAgent:
         else:
             raise NotImplementedError()
 
+
     @tf.function
-    def sample_actions_prime_and_log_probs_from_policy(self, states, actor):
-        probabilities = actor(states)
-        log_probs = tf.math.log(probabilities)
-        actions = tf.random.categorical(logits=log_probs, num_samples=1)[:, 0]
-        one_hot_actions = tf.one_hot(actions, depth=len(ACTIONS))
-        return one_hot_actions, probabilities, log_probs
+    def sample_actions(self, states, actor, deterministic=False):
+        probability_groups = actor(states) # first one for actions, rest for communication channels
+        probability_groups = probability_groups if type(probability_groups) == list else [probability_groups]
+        log_prob_groups = [tf.math.log(probabilities) for probabilities in probability_groups]
+        if deterministic:
+            action_groups = [tf.argmax(probabilities, axis=-1)[0] for probabilities in probability_groups]
+        else:
+            action_groups = [tf.random.categorical(logits=log_probs, num_samples=1)[0,0] for log_probs in log_prob_groups]
+        one_hot_action_groups = [tf.one_hot(actions, depth=probabilities.shape[-1]) for actions, probabilities in zip(action_groups,probability_groups)]
+        return tf.concat(one_hot_action_groups,axis=-1), tf.concat(probability_groups,axis=-1), tf.concat(log_prob_groups,axis=-1)
 
-    def act_deterministic(self, state):
-        actions_prime = {}
-        probabilities = {}
-        for agent_id in self._agent_ids:
-            actor = self._get_actor(agent_id=agent_id)
-            agent_state = tf.convert_to_tensor([state[agent_id]], dtype=tf.float32)
-            probabilities[agent_id] = actor(agent_state)[0]
-            actions_prime[agent_id] = tf.reshape(
-                tf.one_hot(
-                    tf.argmax(probabilities[agent_id]), depth=len(ACTIONS)
-                ),
-                shape=(1, len(ACTIONS))
-            )
-        return self._act(actions_prime), probabilities
 
-    def act_stochastic(self, state) -> Tuple[Tuple, Dict[str, np.ndarray]]:
+
+    def act(self, state, deterministic:bool) -> Tuple[Tuple, Dict[str, np.ndarray]]:
         actions = {
-            agent_id: self.sample_actions_prime_and_log_probs_from_policy(
+            agent_id: self.sample_actions(deterministic=deterministic,
                 states=tf.expand_dims(tf.convert_to_tensor(states), axis=0), actor=self._actor) for agent_id, states in
             state.items()
         }
@@ -203,27 +193,27 @@ class SACAgent:
             agent_id: actions[agent_id][1] for agent_id in self._agent_ids}
 
     def _act(self, all_actions):
-        communications = {agent_id: action[0][len(ACTIONS):] for agent_id, action in all_actions.items()}
-        selected_communications = {agent_id: self._select_communication(communication=com) for agent_id, com in
-                                   communications.items()}
-        selected_actions = {agent_id: ACTIONS[np.argmax(action[0][:len(ACTIONS)])] for agent_id, action in
+        communications = {agent_id: tf.squeeze(action[len(ACTIONS):]) for agent_id, action in all_actions.items()}
+        selected_actions = {agent_id: ACTIONS[np.argmax(action[:len(ACTIONS)])] for agent_id, action in
                             all_actions.items()}
-        actions_dict = {agent_id: (selected_actions[agent_id], selected_communications[agent_id]) for agent_id in
+        actions_dict = {agent_id: (selected_actions[agent_id], communications[agent_id]) for agent_id in
                         all_actions.keys()}
         observation_prime, reward, done, truncated, _ = self._environment.step(actions_dict)
         return all_actions, observation_prime, reward, {agent_id: done[agent_id] or truncated[agent_id] for agent_id in
                                                         self._agent_ids}
 
-    def _select_communication(self, communication: np.ndarray) -> np.ndarray:
-        number_channels = self._environment.stats.number_communication_channels
-        vocab_size = self._environment.stats.size_vocabulary
-        base_array = np.zeros(shape=(number_channels * vocab_size))
-        for base_index in range(0, len(base_array), vocab_size + 1):
-            if communication[base_index] > 0:
-                index = np.argmax(communication[base_index + 1:base_index + 2 + vocab_size])
-                base_array[base_index + index] = 1
-        return base_array
-
+    def train_step_temperature(self, states):
+        action_probs = self._actor(tf.reshape(states, shape=(self._batch_size * len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)))
+        only_action_probs = action_probs[0] if type(action_probs) == list else action_probs # leave out communication
+        log_probs = tf.math.log(only_action_probs)
+        gradient = tf.reduce_mean(
+            tf.matmul(
+                tf.reshape(only_action_probs, shape=(256, 1, 5)),
+                tf.reshape(self._alpha * log_probs, shape=(256, 5, 1))
+            ) + self._target_entropy
+        )
+        #self._alpha -= self._learning_rate * gradient
+        self._loss_logger.add_value(ALPHA_VALUES, self._alpha)
 
     @property
     def agent_flattened_shape(self):

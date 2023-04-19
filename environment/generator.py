@@ -7,7 +7,7 @@ from typing_extensions import Protocol
 import numpy as np
 
 from environment.stats import Stats
-from params import NUMBER_OF_AGENTS, MAX_GRID_SIZE_RANGE, NUMBER_OF_OBJECTS_TO_PLACE_RANGE
+from params import NUMBER_OF_AGENTS, MAX_GRID_SIZE_RANGE, NUMBER_OF_OBJECTS_TO_PLACE_RANGE, MAX_OBJECT_COLOR_RANGE
 
 Grid = np.ndarray
 PositionIndex = Tuple[int,int]
@@ -24,7 +24,7 @@ class WorldGenerator(Protocol):
 
 class RandomWorldGenerator(WorldGenerator):
     _grid_size_range: Tuple[int, int] = (3,MAX_GRID_SIZE_RANGE) # inclusive interval
-    _number_of_object_colors_range: Tuple[int, int] = (1,1) # inclusive interval
+    _number_of_object_colors_range: Tuple[int, int] = (1,MAX_OBJECT_COLOR_RANGE) # inclusive interval
     _number_of_objects_to_place: Tuple[int,int] = NUMBER_OF_OBJECTS_TO_PLACE_RANGE
     _number_of_agents: int = NUMBER_OF_AGENTS
 

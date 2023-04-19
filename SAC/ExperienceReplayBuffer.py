@@ -36,7 +36,7 @@ class ExperienceReplayBuffer:
         self._state_memory[self._current_position] = np.array(list(state.values()))
         self._state_prime_memory[self._current_position] = np.array(list(state_.values()))
     def add_transition(self, state, action, reward, state_, done):
-        self._action_memory[self._current_position] = np.concatenate(list(action.values()))
+        self._action_memory[self._current_position] = list(action.values())
         self._reward_memory[self._current_position] = np.array(list(reward.values())).reshape((-1,1))
         self._done_memory[self._current_position] = np.array(list(done.values())).reshape((-1,1))
         self._add_state_transitions(state=state,state_=state_)

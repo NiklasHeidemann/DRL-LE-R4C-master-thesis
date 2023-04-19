@@ -40,7 +40,9 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
         window.blit(text_field, (550,(index+1)*100+20))
         text_field = my_font.render("max_q_val:   {:.2f}".format(max_q_value[id][0]), True, background_color)
         window.blit(text_field, (550, (index+1)*100+40))
-        text_field = my_font.render(f"best_act:   {ACTIONS[max_q_value[id][1]]}", True, background_color)
+        q_value_index = max_q_value[id][1]
+        best_act = ACTIONS[q_value_index] if q_value_index<len(ACTIONS) else "com"
+        text_field = my_font.render(f"best_act:   {best_act}", True, background_color)
         window.blit(text_field, (550, (index+1)*100+60))
         for action_index in range(len(ACTIONS)):
             text_field = my_font.render(f"{ACTIONS[action_index]}:     {'{:.2f}'.format(action_probs[id][0][action_index])}", True, background_color)

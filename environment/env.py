@@ -33,7 +33,8 @@ class CoopGridWorld(ParallelEnv):
         self._grid, self._agent_positions, self._stats = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
-        self._communications.append({agent_id: np.zeros(shape=(self._stats.number_communication_channels*self._stats.size_vocabulary)) for agent_id in self._stats.agent_ids})
+        default_communications = np.concatenate([[1.]+[0.]*self._stats.size_vocabulary]*self._stats.number_communication_channels) if self._stats.number_communication_channels > 0 else []
+        self._communications.append({agent_id: default_communications for agent_id in self._stats.agent_ids})
         self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
         return self.obs
 
@@ -116,13 +117,14 @@ class CoopGridWorld(ParallelEnv):
 
     def _map_communication_to_str(self, communication: np.ndarray )->str:
         chars = []
-        for index in range(0, len(communication), self.stats.size_vocabulary):
-            token = communication[index:index+self.stats.size_vocabulary]
-            if sum(token) == 0:
+        for index in range(0, len(communication), self.stats.size_vocabulary+1):
+            token = communication[index:index+self.stats.size_vocabulary+1]
+            index = communication.argmax()
+            assert sum(token) == 1
+            if index == 0:
                 chars.append('-')
             else:
-                assert sum(token) == 1
-                chars.append(chr(ord("a")+communication.argmax()))
+                chars.append(chr(ord("a")+index-1))
         return ''.join(chars)
     def _map_cell_to_char(self, pos: Tuple[int, int])->str:
         agent_on_spot = pos in self._agent_positions.values()

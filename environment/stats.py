@@ -31,7 +31,7 @@ class Stats:
         return len(self.visible_positions((0,0)))
     @property
     def observation_dimension(self)->int:
-        return self.number_of_visible_positions*self.values_per_field + self.size_vocabulary*self.number_communication_channels*self.number_of_agents + len(self.stats_observation)
+        return self.number_of_visible_positions*self.values_per_field + (self.size_vocabulary+1)*self.number_communication_channels*self.number_of_agents + len(self.stats_observation)
 
     @property
     def action_dimension(self)->int:
