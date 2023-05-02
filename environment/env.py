@@ -11,13 +11,28 @@ from ipycanvas import Canvas
 from pettingzoo import ParallelEnv
 from pettingzoo.utils.env import ActionDict, ObsDict, AgentID
 
-from params import TIME_STEPS
+from params import TIME_STEPS, SIZE_VOCABULARY, NUMBER_COMMUNICATION_CHANNELS
 from environment.generator import WorldGenerator, PositionIndex
 from environment.stats import Stats
 from environment.reward import ComputeReward
 
-RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], int]
+RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], Dict[AgentID, np.ndarray], int]
 RenderSaveExtended = Tuple[RenderSave, np.ndarray, Dict[AgentID, Tuple[float,float]]]
+
+DEFAULT_COMMUNCIATIONS = np.concatenate([[1.]+[0.]*SIZE_VOCABULARY]*NUMBER_COMMUNICATION_CHANNELS) if NUMBER_COMMUNICATION_CHANNELS > 0 else []
+
+def _map_communication_to_str(communication: np.ndarray) -> str:
+    chars = []
+    for index in range(0, len(communication), SIZE_VOCABULARY + 1):
+        token = communication[index:index + SIZE_VOCABULARY + 1]
+        index = communication.argmax()
+        assert sum(token) == 1, f"{token}, {communication}"
+        if index == 0:
+            chars.append('-')
+        else:
+            chars.append(chr(ord("a") + index - 1))
+    return ''.join(chars)
+
 
 class CoopGridWorld(ParallelEnv):
     _grid: np.ndarray = None
@@ -33,8 +48,7 @@ class CoopGridWorld(ParallelEnv):
         self._grid, self._agent_positions, self._stats = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
-        default_communications = np.concatenate([[1.]+[0.]*self._stats.size_vocabulary]*self._stats.number_communication_channels) if self._stats.number_communication_channels > 0 else []
-        self._communications.append({agent_id: default_communications for agent_id in self._stats.agent_ids})
+        self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS for agent_id in self._stats.agent_ids})
         self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
         return self.obs
 
@@ -103,10 +117,10 @@ class CoopGridWorld(ParallelEnv):
 
     def render(self) -> RenderSave:
         grid = '\n'+'\n'.join([''.join([self._map_cell_to_char(pos=(x,y)) for y in range(self._grid.shape[1])]) for x in range(self._grid.shape[0])])
-        communication = '\t'.join([f"{agent_id}: '{self._map_communication_to_str(communication=com)}'" for agent_id, com in self._communications[-1].items()])
+        communication = '\t'.join([f"{agent_id}: '{_map_communication_to_str(communication=com)}'" for agent_id, com in self._communications[-1].items()])
         output = grid + '\n' + communication
         #print(output)
-        render_save = self._grid.copy(), self._agent_positions.copy(), self._last_agent_actions[-1], self.stats.time_step
+        render_save = self._grid.copy(), self._agent_positions.copy(), self._last_agent_actions[-1], self._communications[-1], self.stats.time_step
         return render_save
     def state(self) -> np.ndarray:
         pass
@@ -115,17 +129,6 @@ class CoopGridWorld(ParallelEnv):
     def stats(self)-> Stats:
         return self._stats
 
-    def _map_communication_to_str(self, communication: np.ndarray )->str:
-        chars = []
-        for index in range(0, len(communication), self.stats.size_vocabulary+1):
-            token = communication[index:index+self.stats.size_vocabulary+1]
-            index = communication.argmax()
-            assert sum(token) == 1
-            if index == 0:
-                chars.append('-')
-            else:
-                chars.append(chr(ord("a")+index-1))
-        return ''.join(chars)
     def _map_cell_to_char(self, pos: Tuple[int, int])->str:
         agent_on_spot = pos in self._agent_positions.values()
         cell = self._grid[pos]
@@ -134,3 +137,8 @@ class CoopGridWorld(ParallelEnv):
         assert sum(cell)==1
         character = chr(ord("a") + np.argmax(cell))
         return character.upper() if agent_on_spot else character
+
+    def copy(self)->"CoopGridWorld":
+        env =  CoopGridWorld(generator=self._generator, compute_reward=self._compute_reward)
+        env._stats = self._stats
+        return env

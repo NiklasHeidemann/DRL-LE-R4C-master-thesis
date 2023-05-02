@@ -23,7 +23,7 @@ class SACAgent:
         signature: learning_rate, state_dim, action_dim -> tensorflow Model
     :param critic_network_generator: a generator function for the critic networks (Q-networks)
         signature: learning_rate, state_dim, action_dim -> tensorflow Model
-    :param learning_rate=0.0003: Learning rate for adam optimizer. # todo testing by kl-divergence
+    :param learning_rate=0.0003: Learning rate for adam optimizer.
         The same learning rate will be used for all networks (Q-Values, Actor)
     :param gamma=0.99: discount factor
     :param tau=0.005:  Polyak averaging coefficient (between 0 and 1)
@@ -183,22 +183,30 @@ class SACAgent:
 
 
 
-    def act(self, state, deterministic:bool) -> Tuple[Tuple, Dict[str, np.ndarray]]:
+    def act(self, state, env,  deterministic:bool, multitimer=None) -> Tuple[Tuple, Dict[str, np.ndarray]]:
+        if multitimer is not None:
+            multitimer.start("tf")
         actions = {
             agent_id: self.sample_actions(deterministic=deterministic,
                 states=tf.expand_dims(tf.convert_to_tensor(states), axis=0), actor=self._actor) for agent_id, states in
             state.items()
         }
-        return self._act({agent_id: actions[agent_id][0] for agent_id in self._agent_ids}), {
+        if multitimer is not None:
+            multitimer.stop("tf")
+            multitimer.start("env")
+        a = self._act({agent_id: actions[agent_id][0] for agent_id in self._agent_ids},env=env), {
             agent_id: actions[agent_id][1] for agent_id in self._agent_ids}
+        if multitimer is not None:
+            multitimer.stop("env")
+        return a
 
-    def _act(self, all_actions):
+    def _act(self, all_actions, env):
         communications = {agent_id: tf.squeeze(action[len(ACTIONS):]) for agent_id, action in all_actions.items()}
         selected_actions = {agent_id: ACTIONS[np.argmax(action[:len(ACTIONS)])] for agent_id, action in
                             all_actions.items()}
         actions_dict = {agent_id: (selected_actions[agent_id], communications[agent_id]) for agent_id in
                         all_actions.keys()}
-        observation_prime, reward, done, truncated, _ = self._environment.step(actions_dict)
+        observation_prime, reward, done, truncated, _ = env.step(actions_dict)
         return all_actions, observation_prime, reward, {agent_id: done[agent_id] or truncated[agent_id] for agent_id in
                                                         self._agent_ids}
 

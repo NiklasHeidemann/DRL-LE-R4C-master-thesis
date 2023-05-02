@@ -1,5 +1,7 @@
 
-visible_positions_13 =         lambda x_y: [
+
+def visible_positions_13(x_y):
+    return [
             (x_y[0]+1,x_y[1]+1),(x_y[0]+1,x_y[1]),(x_y[0]+1,x_y[1]-1),
             (x_y[0],x_y[1]+1),(x_y[0],x_y[1]),(x_y[0],x_y[1]-1),
             (x_y[0]-1,x_y[1]+1),(x_y[0]-1,x_y[1]),(x_y[0]-1,x_y[1]-1),
@@ -17,26 +19,27 @@ BATCH_SIZE =128
 LAYER_SIZE = 32
 LEARNING_RATE = 0.001
 LSTM_SIZE = 8
-NUMBER_OF_BIG_LAYERS = 1
+NUMBER_OF_BIG_LAYERS = 2
 RECURRENT = False
 SELF_PLAY = True
 TIME_STEPS = 1
-ALPHA = 0.05
+ALPHA = 0.03
 GAMMA = 0.99
 TARGET_ENTROPY = 1.
 
 #environment
-MAX_GRID_SIZE_RANGE = 6
+WORLD_GENERATOR = "multi"
+GRID_SIZE_RANGE = (4,8)
 MAX_TIME_STEP = 30
 NUMBER_OF_AGENTS = 2
-NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.12,0.25)
-MAX_OBJECT_COLOR_RANGE = 1
+NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.08,0.2)
+MAX_OBJECT_COLOR_RANGE = 2
 POS_REWARD = 2
-NEG_REWARD = -0.05
+NEG_REWARD = -0.0
 
 #input
-NUMBER_COMMUNICATION_CHANNELS = 0
-SIZE_VOCABULARY = 4
+NUMBER_COMMUNICATION_CHANNELS = 1
+SIZE_VOCABULARY = MAX_OBJECT_COLOR_RANGE
 VISIBLE_POSITIONS = visible_positions_13
 
 #buffer
@@ -46,10 +49,9 @@ PRE_SAMPLING_STEPS = 10000
 #training
 ENVIRONMENT_STEPS_PER_TRAINING = 500
 TRAININGS_PER_TRAINING = 8
-EPOCHS = 100000
-SEED=6
+EPOCHS = 1000000
+SEED=9
+PARALLEL_ENVS = 6
 FROM_SAVE = False
 
-# TODO smoother lines in plot
-# TODO save and load
 ACTIONS = ["HOLD", "LEFT", "RIGHT", "UP", "DOWN"]

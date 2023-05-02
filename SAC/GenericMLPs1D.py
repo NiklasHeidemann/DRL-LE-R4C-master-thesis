@@ -30,7 +30,7 @@ def create_q_network_old(learning_rate, state_dim, action_dim, agent_num: int, n
     inputs_a = keras.Input(shape= action_dim*agent_num)
     x = inputs_s
     if recurrent:
-        x = LSTM(LSTM_SIZE)(x) # QUESTION lstm initialisation?
+        x = LSTM(LSTM_SIZE)(x)
     else:
         x = Reshape([state_dim*agent_num])(x)
     x = Concatenate()([x, inputs_a])
@@ -45,7 +45,7 @@ def create_q_network(learning_rate, state_dim, action_dim, agent_num: int, numbe
     inputs = keras.Input(shape=(TIME_STEPS, state_dim * agent_num))
     x = inputs
     if recurrent:
-        x = LSTM(LSTM_SIZE)(x) # QUESTION lstm initialisation?
+        x = LSTM(LSTM_SIZE)(x)
     else:
         x = Reshape([state_dim*agent_num])(x)
     for _ in range(number_of_big_layers-recurrent):
@@ -58,4 +58,3 @@ def create_q_network(learning_rate, state_dim, action_dim, agent_num: int, numbe
 
 # todo parallelisierung
 #todo lstm
-# todo arne

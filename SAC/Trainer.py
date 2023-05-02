@@ -1,6 +1,9 @@
+import multiprocessing
 from collections import defaultdict
 import datetime
 from collections import defaultdict
+from functools import partial
+from multiprocessing import Process
 from threading import Thread
 from typing import List, Tuple, Dict
 
@@ -14,8 +17,10 @@ from SAC.SACagent import SACAgent
 from environment.render import render_permanently
 from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, OTHER_ACTOR_LOSS, \
     MAX_Q_VALUES, ALPHA_VALUES, ENTROPY
-from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA, TARGET_ENTROPY
+from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA, TARGET_ENTROPY, \
+    PARALLEL_ENVS
 from plots import plot_multiple
+from timer import Timer, MultiTimer
 
 
 class Trainer:
@@ -50,17 +55,22 @@ class Trainer:
                  batch_size: int = BATCH_SIZE, model_path="model/", target_entropy=TARGET_ENTROPY):
         self._loss_logger = LossLogger()
         self._replay_buffer = RecurrentExperienceReplayBuffer(state_dim, action_dim, agent_number=len(agent_ids),
-                                                             max_size=max_replay_buffer_size, batch_size=batch_size)
-        self._agent = SACAgent(environment=environment, loss_logger=self._loss_logger, replay_buffer=self._replay_buffer, self_play=self_play, agent_ids=agent_ids, action_dim=action_dim,actor_network_generator=actor_network_generator,
-                               critic_network_generator=critic_network_generator, recurrent=recurrent, learning_rate=learning_rate, gamma=gamma, tau=tau, reward_scale=reward_scale, alpha=alpha,batch_size=batch_size,model_path=model_path, target_entropy=target_entropy)
+                                                              max_size=max_replay_buffer_size, batch_size=batch_size)
+        self._agent = SACAgent(environment=environment, loss_logger=self._loss_logger,
+                               replay_buffer=self._replay_buffer, self_play=self_play, agent_ids=agent_ids,
+                               action_dim=action_dim, actor_network_generator=actor_network_generator,
+                               critic_network_generator=critic_network_generator, recurrent=recurrent,
+                               learning_rate=learning_rate, gamma=gamma, tau=tau, reward_scale=reward_scale,
+                               alpha=alpha, batch_size=batch_size, model_path=model_path, target_entropy=target_entropy)
         self._environment = environment
         self._batch_size = batch_size
         self._agent_ids = agent_ids
         if from_save:
             self._agent.load_models(name="")
 
-    def train(self, epochs, environment_steps_before_training=1, training_steps_per_update=1,
-              max_environment_steps_per_epoch=None, pre_sampling_steps=1024):
+    def ss(self, n):
+        return n
+    def train(self, epochs, environment_steps_before_training, pre_sampling_steps, training_steps_per_update=1):
         """
         trains the SAC Agent
         :param epochs: Number of epochs to train.
@@ -76,63 +86,69 @@ class Trainer:
         self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
         self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
         self._loss_logger.add_lists([RETURNS], smoothed=1000)
-        return_dict = defaultdict(float)
-        observation_dict = self._environment.reset()
-        action_probs = defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS))))
-        done_dict = {"": False}
-        ret = 0
-        epoch = 0
-        steps = 0
-        j = 0
-        render_save = []
-        last_render_as_list = []
-        thread = Thread(target=render_permanently, args=[last_render_as_list])
+        self._last_render_as_list = []
+        thread = Thread(target=render_permanently, args=[self._last_render_as_list])
         thread.start()
+
+        observation_dict = self._environment.reset()
+        # default values for first iteration:
+        done_dict = {"": False}
+        action_probs = defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS))))
+        ret = 0
+
+        render_save = []
+        epoch = 0
+        steps_total = 0
         while True:
-            i = 0
-            while i < environment_steps_before_training or self._replay_buffer.size() < self._batch_size:
-                if epoch % 10 == 0:
-                    render_save.append(
-                        (self._environment.render(), action_probs, self._agent._get_max_q_value(states=observation_dict)))
-                if False not in done_dict.values() or (
-                        max_environment_steps_per_epoch is not None and j >= max_environment_steps_per_epoch):
+            with MultiTimer(desc="tensorflow") as multitimer:
+                steps = 0
+                while steps < environment_steps_before_training:
                     if epoch % 10 == 0:
-                        print("epoch:", epoch, "steps:", steps,
-                              "actor-loss: {:.2f}".format(self._loss_logger.last(ACTOR_LOSS)),
-                              "critic-loss: {:.2f}".format(self._loss_logger.last(CRITIC_LOSS)),
-                              "return: {:.2f}".format(self._loss_logger.last(RETURNS)),
-                              "avg return: {:.2f}".format(self._loss_logger.avg_last(RETURNS, 10)))
-                        last_render_as_list.append(render_save)
-                        render_save = []
-                        if len(last_render_as_list) > 1:
-                            last_render_as_list.pop(0)
-                    observation_dict = self._environment.reset()
-                    self._loss_logger.add_value(identifier=RETURNS, value=ret)
-                    ret = 0
-                    return_dict = defaultdict(float)
-                    epoch += 1
-                    if epoch % 1000 == 0:
-                        self.test(n_samples=20, verbose_samples=0)
-                    if epoch % 1000 == 0 or epoch >= epochs:
-                        self._agent.save_models(name="")
-                    if epoch % 1000 == 0 or epoch >= epochs:
-                        thread = Thread(target=plot_multiple, args=[self._loss_logger.all_smoothed()])
-                        thread.start()
-                    if epoch >= epochs:
-                        print("training finished!")
-                        return
-                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act(
-                    observation_dict,deterministic=False)
-                self._replay_buffer.add_transition(state=observation_dict, action=actions_dict, reward=reward_dict,
-                                                  state_=new_observation_dict, done=done_dict)
-                observation_dict = new_observation_dict
-                steps += 1
-                ret += sum(reward_dict.values())
-                return_dict = {key: return_dict[key] + reward_dict[key] for key in reward_dict.keys()}
-                i += 1
-                j += 1
+                        render_save.append(
+                            (self._environment.render(), action_probs,
+                             self._agent._get_max_q_value(states=observation_dict)))
+                    if False not in done_dict.values():
+                        if epoch % 10 == 0:
+                            print("epoch:", epoch, "steps:", steps_total,
+                                  "actor-loss: {:.2f}".format(self._loss_logger.last(ACTOR_LOSS)),
+                                  "critic-loss: {:.2f}".format(self._loss_logger.last(CRITIC_LOSS)),
+                                  "return: {:.2f}".format(self._loss_logger.last(RETURNS)),
+                                  "avg return: {:.2f}".format(self._loss_logger.avg_last(RETURNS, 10)))
+                            self._last_render_as_list.append(render_save)
+                            render_save = []
+                            if len(self._last_render_as_list) > 1:
+                                self._last_render_as_list.pop(0)
+                        observation_dict = self._environment.reset()
+                        epoch += 1
+                        if epoch % 10 == 0:
+                            render_save.append(
+                                (self._environment.render(),
+                                 defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS)))),
+                                 self._agent._get_max_q_value(states=observation_dict)))
+                        self._loss_logger.add_value(identifier=RETURNS, value=ret)
+                        ret = 0
+                        if epoch % 1000 == 0:
+                            self.test(n_samples=20, verbose_samples=0)
+                            self._agent.save_models(name="")
+                            thread = Thread(target=plot_multiple, args=[self._loss_logger.all_smoothed()])
+                            thread.start()
+                        if epoch >= epochs:
+                            print("training finished!")
+                            return
+                    (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act(
+                        observation_dict, deterministic=False, env=self._environment,multitimer=multitimer)
+                    self._replay_buffer.add_transition(state=observation_dict, action=actions_dict,
+                                                       reward=reward_dict,
+                                                       state_=new_observation_dict, done=done_dict)
+                    observation_dict = new_observation_dict
+                    steps += 1
+                    steps_total += 1
+                    ret += sum(reward_dict.values())
+
             for _ in range(training_steps_per_update):
-                self.learn()
+                with Timer(desc="learn"):
+                    self.learn()
+
 
     def learn(self) -> None:
         for _ in range(TRAININGS_PER_TRAINING):
@@ -162,10 +178,11 @@ class Trainer:
         observation_dict = self._environment.reset()
         ret = 0
         for _ in range(pre_sampling_steps):
-            (actions_dict, new_observation_dict, reward_dict, done_dict), _ = self._agent.act(observation_dict, deterministic=False)
+            (actions_dict, new_observation_dict, reward_dict, done_dict), _ = self._agent.act(observation_dict,
+                                                                                              deterministic=False, env=self._environment)
             ret += sum(reward_dict.values())
             self._replay_buffer.add_transition(state=observation_dict, action=actions_dict, reward=reward_dict,
-                                              state_=new_observation_dict, done=done_dict)
+                                               state_=new_observation_dict, done=done_dict)
             if False not in done_dict.values():
                 ret = 0
                 observation_dict = self._environment.reset()
@@ -183,7 +200,7 @@ class Trainer:
                 if index < verbose_samples:
                     render_save.append((self._environment.render(), action_probs))
                 (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act(
-                    observation_dict,deterministic=True)
+                    observation_dict, deterministic=True, env=self._environment)
                 if index < verbose_samples:
                     print(actions_dict)
                 return_ += sum(reward_dict.values())
@@ -203,4 +220,3 @@ class Trainer:
     @property
     def extended_shape(self):
         return (self._batch_size, len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)
-

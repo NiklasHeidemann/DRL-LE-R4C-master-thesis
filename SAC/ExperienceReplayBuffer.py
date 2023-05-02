@@ -1,3 +1,5 @@
+import multiprocessing
+
 import tensorflow as tf
 import numpy as np
 from typing_extensions import override
@@ -36,13 +38,13 @@ class ExperienceReplayBuffer:
         self._state_memory[self._current_position] = np.array(list(state.values()))
         self._state_prime_memory[self._current_position] = np.array(list(state_.values()))
     def add_transition(self, state, action, reward, state_, done):
-        self._action_memory[self._current_position] = list(action.values())
-        self._reward_memory[self._current_position] = np.array(list(reward.values())).reshape((-1,1))
-        self._done_memory[self._current_position] = np.array(list(done.values())).reshape((-1,1))
-        self._add_state_transitions(state=state,state_=state_)
-        if self._size < self._max_size:
-            self._size += 1
-        self._current_position = (self._current_position + 1) % self._max_size
+            self._action_memory[self._current_position] = list(action.values())
+            self._reward_memory[self._current_position] = np.array(list(reward.values())).reshape((-1,1))
+            self._done_memory[self._current_position] = np.array(list(done.values())).reshape((-1,1))
+            self._add_state_transitions(state=state,state_=state_)
+            if self._size < self._max_size:
+                self._size += 1
+            self._current_position = (self._current_position + 1) % self._max_size
 
     def sample_batch(self):
         batch_indices = np.random.choice(self._size, self._batch_size, replace=False)

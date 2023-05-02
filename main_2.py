@@ -4,14 +4,15 @@ from functools import partial
 from SAC.GenericMLPs1D import create_policy_network, create_q_network
 from SAC.Trainer import SACAgent, Trainer
 from environment.env import CoopGridWorld
-from environment.generator import RandomWorldGenerator
+from environment.generator import RandomWorldGenerator, ChoiceWorldGenerator, MultiGenerator
 from environment.reward import TwoCoopComputeReward, SingleComputeReward, AtLeastOneComputeReward, FirstOneComputeReward
 import tensorflow as tf
 import matplotlib
 
-from params import MAX_TIME_STEP, NUMBER_COMMUNICATION_CHANNELS, SIZE_VOCABULARY, VISIBLE_POSITIONS, \
+from language.predictGoal import TrainPredictGoal
+from params import NUMBER_COMMUNICATION_CHANNELS, SIZE_VOCABULARY, VISIBLE_POSITIONS, \
     NUMBER_OF_BIG_LAYERS, NUMBER_OF_AGENTS, MAX_REPLAY_BUFFER_SIZE, SEED, EPOCHS, PRE_SAMPLING_STEPS, \
-    ENVIRONMENT_STEPS_PER_TRAINING, SELF_PLAY, RECURRENT, FROM_SAVE
+    ENVIRONMENT_STEPS_PER_TRAINING, SELF_PLAY, RECURRENT, FROM_SAVE, WORLD_GENERATOR
 from plots import delete_old_plots
 
 matplotlib.use("agg")
@@ -21,8 +22,12 @@ tf.random.set_seed(SEED)
 
 compute_reward = SingleComputeReward() if NUMBER_OF_AGENTS == 1 else TwoCoopComputeReward()
 
-env = CoopGridWorld(generator=RandomWorldGenerator(seed=SEED), compute_reward=compute_reward)
-env.stats.max_time_step = MAX_TIME_STEP
+random_world_generator = RandomWorldGenerator(seed=SEED)
+choice_world_generator = ChoiceWorldGenerator(seed=SEED)
+multi_world_generator = MultiGenerator(generators=[random_world_generator, choice_world_generator])
+selected_world_generator = multi_world_generator if WORLD_GENERATOR == "multi" else (random_world_generator if WORLD_GENERATOR == "random" else (choice_world_generator if WORLD_GENERATOR == "choice" else None))
+
+env = CoopGridWorld(generator=selected_world_generator, compute_reward=compute_reward)
 env.stats.number_communication_channels = NUMBER_COMMUNICATION_CHANNELS
 env.stats.size_vocabulary = SIZE_VOCABULARY
 env.stats.visible_positions = VISIBLE_POSITIONS
@@ -36,6 +41,7 @@ sac_agent = Trainer(environment=env, from_save=FROM_SAVE, self_play=SELF_PLAY, a
                                                       action_dim=env.stats.action_dimension, number_of_big_layers=NUMBER_OF_BIG_LAYERS))
 sac_agent._agent._critic_1.summary()
 sac_agent._agent._actor.summary() if SELF_PLAY else sac_agent._agent._actors["0"].summary()
-sac_agent.test(n_samples=20, verbose_samples=0)
+sac_agent.test(n_samples=2, verbose_samples=0)
 sac_agent.train(epochs=EPOCHS, pre_sampling_steps=PRE_SAMPLING_STEPS, environment_steps_before_training=ENVIRONMENT_STEPS_PER_TRAINING)
 sac_agent.test(n_samples=20, verbose_samples=0)
+TrainPredictGoal()(environment=env,agent=sac_agent._agent)
