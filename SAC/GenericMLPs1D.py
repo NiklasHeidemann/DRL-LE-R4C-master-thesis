@@ -35,7 +35,7 @@ def create_q_network_old(learning_rate, state_dim, action_dim, agent_num: int, n
         x = Reshape([state_dim*agent_num])(x)
     x = Concatenate()([x, inputs_a])
     for _ in range(number_of_big_layers-recurrent):
-        x = Dense(LAYER_SIZE, activation=tf.nn.relu)(x)
+        x = Dense(LAYER_SIZE, activation=tf.nn.relu,kernel_regularizer=tf.keras.regularizers.l2(0.05))(x)
     out = Dense(agent_num, activation=None)(x)
     model = keras.Model(inputs=(inputs_s, inputs_a), outputs=out)
     model.compile(optimizer=Adam(learning_rate=learning_rate))
@@ -49,7 +49,7 @@ def create_q_network(learning_rate, state_dim, action_dim, agent_num: int, numbe
     else:
         x = Reshape([state_dim*agent_num])(x)
     for _ in range(number_of_big_layers-recurrent):
-        x = Dense(LAYER_SIZE, activation=tf.nn.relu)(x)
+        x = Dense(LAYER_SIZE, activation=tf.nn.relu,kernel_regularizer=tf.keras.regularizers.l2(0.01) )(x)
     out = Dense(agent_num*action_dim, activation=None)(x)
     model = keras.Model(inputs=inputs, outputs=out)
     model.compile(optimizer=Adam(learning_rate=learning_rate))

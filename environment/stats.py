@@ -24,7 +24,7 @@ class Stats:
     @property
     def stats_observation(self)->np.ndarray:
         #return np.array([self.grid_size, self.number_of_agents, self.number_of_objects, self.number_of_used_colors, self.time_step])
-        return np.array([])
+        return np.array([self.max_time_step/30, self.time_step])
 
     @property
     def number_of_visible_positions(self)->int:

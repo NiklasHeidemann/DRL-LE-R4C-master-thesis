@@ -13,22 +13,31 @@ from params import NUMBER_OF_AGENTS, NUMBER_OF_OBJECTS_TO_PLACE_RANGE, MAX_OBJEC
 Grid = np.ndarray
 PositionIndex = Tuple[int,int]
 AgentPositions = Dict[AgentID, PositionIndex]
+Type = str
 
 
 class WorldGenerator(Protocol):
 
 
     @abstractmethod
-    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats]:
+    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats, Type]:
+        ...
+
+    @property
+    @abstractmethod
+    def types(self)->List[str]:
         ...
 
 class MultiGenerator(WorldGenerator):
 
     def __init__(self, generators: List[WorldGenerator]):
         self._generators = generators
-    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats]:
+    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats, Type]:
         return self._generators[random.randrange(len(self._generators))](last_stats=last_stats)
 
+    @property
+    def types(self)->List[str]:
+        return [elem for list_ in [generator.types for generator in self._generators] for elem in list_]
 
 class RandomWorldGenerator(WorldGenerator):
     _grid_size_range: Tuple[int, int] = GRID_SIZE_RANGE # inclusive interval
@@ -38,7 +47,7 @@ class RandomWorldGenerator(WorldGenerator):
 
     def __init__(self, seed: int):
         random.seed(seed)
-    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats]:
+    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats, Type]:
         stats = last_stats.new_stats_from_old_stats()
         stats.values_per_field = self._number_of_object_colors_range[1]
         stats.time_step = 0
@@ -47,7 +56,7 @@ class RandomWorldGenerator(WorldGenerator):
         grid = np.zeros(shape=(stats.grid_size, stats.grid_size, stats.values_per_field))
         grid_with_objects = self._place_objects(grid=grid, stats=stats)
         agent_positions = self._spawn_agents(stats=stats)
-        return grid_with_objects, agent_positions, stats
+        return grid_with_objects, agent_positions, stats, self.types[0]
     def _spawn_agents(self, stats: Stats)->AgentPositions:
         stats.number_of_agents = self._number_of_agents
         agent_positions = {}
@@ -68,6 +77,10 @@ class RandomWorldGenerator(WorldGenerator):
             position = (random.randint(0, len(grid)-1), random.randint(0,len(grid[0])-1))
         return position
 
+    @property
+    def types(self)->List[str]:
+        return ["rwg"]
+
 class ChoiceWorldGenerator(WorldGenerator):
     _grid_size: int = 10
     _number_of_object_colors: int= MAX_OBJECT_COLOR_RANGE
@@ -76,7 +89,7 @@ class ChoiceWorldGenerator(WorldGenerator):
 
     def __init__(self, seed: int):
         random.seed(seed)
-    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats]:
+    def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats, Type]:
         stats = last_stats.new_stats_from_old_stats()
         stats.values_per_field = self._number_of_object_colors
         stats.time_step = 0
@@ -85,7 +98,7 @@ class ChoiceWorldGenerator(WorldGenerator):
         grid = np.zeros(shape=(stats.grid_size, stats.grid_size, stats.values_per_field))
         grid_with_objects = self._place_objects(grid=grid, stats=stats)
         agent_positions = self._spawn_agents(stats=stats)
-        return grid_with_objects, agent_positions, stats
+        return grid_with_objects, agent_positions, stats, self.types[0]
     def _spawn_agents(self, stats: Stats)->AgentPositions:
         stats.number_of_agents = self._number_of_agents
         agent_positions = {'0':(2,2),'1':(7,7)}
@@ -106,3 +119,7 @@ class ChoiceWorldGenerator(WorldGenerator):
                 object_color = random.randint(0, stats.number_of_used_colors-1)
                 grid[(x,y,object_color)] = 1
         return grid
+
+    @property
+    def types(self)->List[str]:
+        return ["chwg"]

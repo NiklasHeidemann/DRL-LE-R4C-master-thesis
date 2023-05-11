@@ -41,11 +41,12 @@ class CoopGridWorld(ParallelEnv):
     _communications: List[Dict[AgentID, np.ndarray]] = None
     _last_agent_actions: List[Dict[AgentID, str]] = None
     _last_observations: Dict[AgentID, deque[np.ndarray]] = None
+    _type: str = None
     def __init__(self, generator: WorldGenerator, compute_reward: ComputeReward):
         self._generator = generator
         self._compute_reward = compute_reward
     def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> ObsDict:
-        self._grid, self._agent_positions, self._stats = self._generator(last_stats=self._stats)
+        self._grid, self._agent_positions, self._stats, self._type = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
         self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS for agent_id in self._stats.agent_ids})
@@ -142,3 +143,11 @@ class CoopGridWorld(ParallelEnv):
         env =  CoopGridWorld(generator=self._generator, compute_reward=self._compute_reward)
         env._stats = self._stats
         return env
+
+    @property
+    def current_type(self)->str:
+        return self._type
+
+    @property
+    def types(self)->List[str]:
+        return self._generator.types

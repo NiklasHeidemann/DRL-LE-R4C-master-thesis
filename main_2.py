@@ -24,7 +24,7 @@ compute_reward = SingleComputeReward() if NUMBER_OF_AGENTS == 1 else TwoCoopComp
 
 random_world_generator = RandomWorldGenerator(seed=SEED)
 choice_world_generator = ChoiceWorldGenerator(seed=SEED)
-multi_world_generator = MultiGenerator(generators=[random_world_generator, choice_world_generator])
+multi_world_generator = MultiGenerator(generators=[random_world_generator, choice_world_generator, choice_world_generator, choice_world_generator])
 selected_world_generator = multi_world_generator if WORLD_GENERATOR == "multi" else (random_world_generator if WORLD_GENERATOR == "random" else (choice_world_generator if WORLD_GENERATOR == "choice" else None))
 
 env = CoopGridWorld(generator=selected_world_generator, compute_reward=compute_reward)

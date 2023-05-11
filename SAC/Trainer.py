@@ -85,7 +85,7 @@ class Trainer:
         print("start training!")
         self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
         self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
-        self._loss_logger.add_lists([RETURNS], smoothed=1000)
+        self._loss_logger.add_lists([RETURNS]+self._environment.types, smoothed=1000)
         self._last_render_as_list = []
         thread = Thread(target=render_permanently, args=[self._last_render_as_list])
         thread.start()
@@ -118,6 +118,9 @@ class Trainer:
                             render_save = []
                             if len(self._last_render_as_list) > 1:
                                 self._last_render_as_list.pop(0)
+                        self._loss_logger.add_value(identifier=RETURNS, value=ret)
+                        self._loss_logger.add_value(identifier=self._environment.current_type, value=ret)
+                        ret = 0
                         observation_dict = self._environment.reset()
                         epoch += 1
                         if epoch % 10 == 0:
@@ -125,8 +128,6 @@ class Trainer:
                                 (self._environment.render(),
                                  defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS)))),
                                  self._agent._get_max_q_value(states=observation_dict)))
-                        self._loss_logger.add_value(identifier=RETURNS, value=ret)
-                        ret = 0
                         if epoch % 1000 == 0:
                             self.test(n_samples=20, verbose_samples=0)
                             self._agent.save_models(name="")
@@ -162,7 +163,7 @@ class Trainer:
                 states_prime=tf.reshape(tensor=states_prime, shape=self.extended_shape),
                 dones=tf.reshape(tensor=dones, shape=(self._batch_size, len(self._agent_ids))),
             )
-            self._agent.train_step_temperature(states)
+            #self._agent.train_step_temperature(states)
             self._agent.update_target_weights()
             self._loss_logger.add_aggregatable_values(
                 {CRITIC_LOSS: critic_loss, LOG_PROBS: log_probs, ACTOR_LOSS: actor_loss, Q_VALUES: q_values,
