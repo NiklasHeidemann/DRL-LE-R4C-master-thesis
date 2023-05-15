@@ -13,10 +13,8 @@ from language.predictGoal import TrainPredictGoal
 from params import NUMBER_COMMUNICATION_CHANNELS, SIZE_VOCABULARY, VISIBLE_POSITIONS, \
     NUMBER_OF_BIG_LAYERS, NUMBER_OF_AGENTS, MAX_REPLAY_BUFFER_SIZE, SEED, EPOCHS, PRE_SAMPLING_STEPS, \
     ENVIRONMENT_STEPS_PER_TRAINING, SELF_PLAY, RECURRENT, FROM_SAVE, WORLD_GENERATOR
-from plots import delete_old_plots
 
 matplotlib.use("agg")
-#delete_old_plots()
 random.seed(SEED)
 tf.random.set_seed(SEED)
 
