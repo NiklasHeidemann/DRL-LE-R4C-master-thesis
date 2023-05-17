@@ -71,6 +71,14 @@ class Trainer:
     def ss(self, n):
         return n
     def train(self, epochs, environment_steps_before_training, pre_sampling_steps, training_steps_per_update=1):
+        # todo refactor this
+        # gym wrappen for multiprocessing alternativ ray alternativ (wenn cheap: einfach hundert environments sequentiell)
+        # vorher schauen wo die Zeit herkommt
+        # xenias idee ist trivialer
+        # loggen aber richtig
+        # reshapen in learn notwendig?
+        # timetracing
+        # lstm groesser
         """
         trains the SAC Agent
         :param epochs: Number of epochs to train.

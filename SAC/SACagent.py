@@ -116,7 +116,7 @@ class SACAgent:
         target_network.set_weights(new_wights)
 
 
-    @tf.function
+    #@tf.function
     def train_step_critic(self, states, actions, rewards, states_prime, dones):
         _, action_probs, log_probs = self.sample_actions(tf.reshape(states_prime,
                                                                                                     shape=(
@@ -147,7 +147,7 @@ class SACAgent:
         critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
         return loss
 
-    @tf.function
+    #@tf.function
     def train_step_actor(self, states) -> Tuple[float, float, float]:
         reshaped_states = tf.reshape(states, shape=self.agent_flattened_shape)
         if self._self_play:
@@ -169,7 +169,7 @@ class SACAgent:
             raise NotImplementedError()
 
 
-    @tf.function
+    #@tf.function
     def sample_actions(self, states, actor, deterministic=False):
         probability_groups = actor(states) # first one for actions, rest for communication channels
         probability_groups = probability_groups if type(probability_groups) == list else [probability_groups]
