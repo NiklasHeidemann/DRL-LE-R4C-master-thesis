@@ -68,8 +68,6 @@ class Trainer:
         if from_save:
             self._agent.load_models(name="")
 
-    def ss(self, n):
-        return n
     def train(self, epochs, environment_steps_before_training, pre_sampling_steps, training_steps_per_update=1):
         # todo refactor this
         # gym wrappen for multiprocessing alternativ ray alternativ (wenn cheap: einfach hundert environments sequentiell)
