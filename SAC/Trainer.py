@@ -69,27 +69,27 @@ class Trainer:
         thread = Thread(target=render_permanently, args=[self._last_render_as_list])
         thread.start()
 
-    def _env_step(self, observation_dict, multitimer: MultiTimer, ret: float):
-        (actions_array, new_observation_dict, reward_array, done), action_probs = self._agent.act(
-            observation_dict, deterministic=False, env=self._environment, multitimer=multitimer)
-        self._replay_buffer.add_transition(state=observation_dict, action=actions_array,
+    def _env_step(self, observation_array, multitimer: MultiTimer, ret: float):
+        (actions_array, new_observation_array, reward_array, done), action_probs = self._agent.act(
+            observation_array, deterministic=False, env=self._environment, multitimer=multitimer)
+        self._replay_buffer.add_transition(state=observation_array, action=actions_array,
                                            reward=reward_array,
-                                           state_=new_observation_dict, done=done)
-        observation_dict = new_observation_dict
+                                           state_=new_observation_array, done=done)
+        observation_array = new_observation_array
         ret += sum(reward_array)
-        return observation_dict, ret, done, action_probs
+        return observation_array, ret, done, action_probs
 
-    def _extend_render_save(self, epoch: int, render_save: List[RenderSaveExtended], action_probs, observation_dict: Dict[str, np.ndarray]):
-        if epoch % 10 == 0:
+    def _extend_render_save(self, epoch: int, render_save: List[RenderSaveExtended], action_probs, observation_array: np.ndarray):
+        if epoch % 40 == 0:
             render_save.append((self._environment.render(), action_probs,
-                 self._agent._get_max_q_value(states=observation_dict)))
+                 self._agent._get_max_q_value(states=observation_array)))
     def _reset_env(self, epoch: int, steps_total: int, render_save: List[RenderSaveExtended], ret: float):
-            if epoch % 10 == 0:
+            if epoch % 40 == 0:
                 print("epoch:", epoch, "steps:", steps_total,
                       "actor-loss: {:.2f}".format(self._loss_logger.last(ACTOR_LOSS)),
                       "critic-loss: {:.2f}".format(self._loss_logger.last(CRITIC_LOSS)),
                       "return: {:.2f}".format(self._loss_logger.last(RETURNS)),
-                      "avg return: {:.2f}".format(self._loss_logger.avg_last(RETURNS, 10)))
+                      "avg return: {:.2f}".format(self._loss_logger.avg_last(RETURNS, 40)))
                 self._last_render_as_list.append(render_save)
                 render_save = []
                 if len(self._last_render_as_list) > 1:
@@ -97,15 +97,15 @@ class Trainer:
             self._loss_logger.add_value(identifier=RETURNS, value=ret)
             self._loss_logger.add_value(identifier=self._environment.current_type, value=ret)
             ret = 0
-            observation_dict = self._environment.reset()
+            observation_array = self._environment.reset()
             epoch += 1
-            self._extend_render_save(epoch=epoch, render_save=render_save, action_probs=np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension)), observation_dict=observation_dict)
+            self._extend_render_save(epoch=epoch, render_save=render_save, action_probs=np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension)), observation_array=observation_array)
             if epoch % 1000 == 0:
                 self.test(n_samples=20, verbose_samples=0)
                 self._agent.save_models(name="")
                 thread = Thread(target=plot_multiple, args=[self._loss_logger.all_smoothed()])
                 thread.start()
-            return observation_dict, epoch, ret
+            return observation_array, epoch, ret
 
     def train(self, epochs, environment_steps_before_training, pre_sampling_steps, training_steps_per_update=1):
         # todo gym wrappen for multiprocessing alternativ ray alternativ (wenn cheap: einfach hundert environments sequentiell)
@@ -129,7 +129,7 @@ class Trainer:
         self._prepare_logging()
         print("start training!")
 
-        observation_dict = self._environment.reset()
+        observation_array = self._environment.reset()
         # default values for first iteration:
         done = False
         action_probs: Dict[str, np.ndarray] = np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension))
@@ -142,14 +142,14 @@ class Trainer:
             with MultiTimer(desc="tensorflow") as multitimer:
                 steps = 0
                 while steps < environment_steps_before_training:
-                    self._extend_render_save(epoch=epoch, render_save=render_save, action_probs=action_probs, observation_dict=observation_dict)
+                    self._extend_render_save(epoch=epoch, render_save=render_save, action_probs=action_probs, observation_array=observation_array)
                     if done:
-                        observation_dict, epoch, ret =self._reset_env(epoch=epoch, steps_total=steps_total, render_save=render_save, ret=ret)
+                        observation_array, epoch, ret =self._reset_env(epoch=epoch, steps_total=steps_total, render_save=render_save, ret=ret)
                         if epoch >= epochs:
                             print("training finished!")
                             return
-                    observation_dict, ret, done, action_probs = self._env_step(
-                        observation_dict=observation_dict, multitimer=multitimer, ret=ret
+                    observation_array, ret, done, action_probs = self._env_step(
+                        observation_array=observation_array, multitimer=multitimer, ret=ret
                     )
                     steps += 1
                     steps_total += 1
@@ -184,32 +184,32 @@ class Trainer:
 
     def _pre_sample(self, pre_sampling_steps: int):
         print(f"Random exploration for {pre_sampling_steps} steps!")
-        observation_dict = self._environment.reset()
+        observation_array = self._environment.reset()
         ret = 0
         for _ in range(pre_sampling_steps):
-            (actions_array, new_observation_dict, reward_array, done), _ = self._agent.act(observation_dict,
+            (actions_array, new_observation_array, reward_array, done), _ = self._agent.act(state=observation_array,
                                                                                               deterministic=False, env=self._environment)
             ret += sum(reward_array)
-            self._replay_buffer.add_transition(state=observation_dict, action=actions_array, reward=reward_array,
-                                               state_=new_observation_dict, done=done)
+            self._replay_buffer.add_transition(state=observation_array, action=actions_array, reward=reward_array,
+                                               state_=new_observation_array, done=done)
             if done:
                 ret = 0
-                observation_dict = self._environment.reset()
+                observation_array = self._environment.reset()
             else:
-                observation_dict = new_observation_dict
+                observation_array = new_observation_array
 
     def test(self, n_samples: int, verbose_samples: int):
         returns = []
         render_save = []
         for index in range(n_samples):
-            observation_dict = self._environment.reset()
+            observation_array = self._environment.reset()
             action_probs = defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS))))
             return_ = 0
             while True:
                 if index < verbose_samples:
                     render_save.append((self._environment.render(), action_probs))
-                (actions_array, new_observation_dict, reward_array, done), action_probs = self._agent.act(
-                    observation_dict, deterministic=True, env=self._environment)
+                (actions_array, new_observation_array, reward_array, done), action_probs = self._agent.act(
+                    observation_array, deterministic=True, env=self._environment)
                 return_ += sum(reward_array)
                 if done:
                     returns.append(return_)
@@ -218,7 +218,7 @@ class Trainer:
                     print(
                         f"Finished test episode {index} with a return of {return_} after {self._environment.stats.time_step} time steps.")
                     break
-                observation_dict = new_observation_dict
+                observation_array = new_observation_array
             # if index == 0:
             #    thread = Thread(target=render_episode,args=[render_save])
             #    thread.start()

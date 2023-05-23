@@ -40,7 +40,7 @@ class CoopGridWorld(ParallelEnv):
     _agent_positions: Dict[AgentID, PositionIndex] = None
     _communications: List[Dict[AgentID, np.ndarray]] = None
     _last_agent_actions: List[Dict[AgentID, str]] = None
-    _last_observations: Dict[AgentID, deque[np.ndarray]] = None
+    _last_observations: deque[np.ndarray] = None
     _type: str = None
     _lock_first_goal: bool
     _agents_locked: Dict[AgentID, int] = None
@@ -48,12 +48,14 @@ class CoopGridWorld(ParallelEnv):
         self._generator = generator
         self._compute_reward = compute_reward
         self._lock_first_goal = lock_first_goal
-    def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> ObsDict:
+
+    def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> np.ndarray:
         self._grid, self._agent_positions, self._stats, self._type = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
         self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS for agent_id in self._stats.agent_ids})
-        self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
+        #self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
+        self._last_observations = deque([self._obs_array]*TIME_STEPS)
         self._agents_locked = {agent_id: -1 for agent_id in self._stats.agent_ids}
         return self.obs
 
@@ -68,19 +70,19 @@ class CoopGridWorld(ParallelEnv):
     def _is_valid_position(self, position: Tuple[int, int])->bool:
         return position[0]>=0 and position[0]<len(self._grid) and position[1]>=0 and position[1]<len(self._grid[0])
     @property
-    def _obs_dict(self)->Dict[AgentID, np.ndarray]:
-        return {agent_id: self._obs_for_agent(agent_id) for agent_id in self._stats.agent_ids}
+    def _obs_array(self)->np.ndarray:
+        return np.array([self._obs_for_agent(agent_id) for agent_id in self._stats.agent_ids])
 
     @property
-    def obs(self):
-        return {agent_id: np.reshape(obs, newshape=(TIME_STEPS, -1)) for agent_id, obs in  self._last_observations.items()}
+    def obs(self)->np.ndarray: # dimensions: TimeStep, AgentId, Observation
+        return np.array(self._last_observations)
     def seed(self, seed=None):
         random.seed(seed)
 
     def step(self,
              actions: np.ndarray # dimensions: AgentID, Action+Communication
              ) -> Tuple[
-        ObsDict, np.ndarray, bool, bool
+        np.array, np.ndarray, bool, bool
     ]:
         self._stats.time_step+=1
         self._communications.append({})
@@ -93,9 +95,8 @@ class CoopGridWorld(ParallelEnv):
         reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._agents_locked if self._lock_first_goal else None)
         is_terminated = max(reward_array)>0
         is_truncated = self._stats.time_step >= self._stats.max_time_step
-        for agent_id, obs in self._obs_dict.items():
-            self._last_observations[agent_id].append(obs)
-            self._last_observations[agent_id].popleft()
+        self._last_observations.append(self._obs_array)
+        self._last_observations.popleft()
         return (
             self.obs,
             reward_array,

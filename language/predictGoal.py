@@ -22,11 +22,11 @@ class TrainPredictGoal:
         communications = []
         type_of_returns = []
         for index in range(NUMBER_SAMPLES):
-            observation_dict = environment.reset()
+            observation_array = environment.reset()
             while True:
-                    (_, new_observation_dict, reward_array, done),_ = agent.act(
-                        observation_dict, deterministic=True, env=environment)
-                    observation_dict = new_observation_dict
+                    (_, new_observation_array, reward_array, done),_ = agent.act(
+                        observation_array, deterministic=True, env=environment)
+                    observation_array = new_observation_array
                     if done:
                         if not sum(reward_array)> NEG_REWARD:
                             break

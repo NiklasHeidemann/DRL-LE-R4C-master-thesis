@@ -69,14 +69,14 @@ class SACAgent:
         self._wight_init()
 
     def _get_max_q_value(self, states):
-        reshaped_states = tf.reshape(np.array(list(states.values())), shape=(
+        reshaped_states = tf.reshape(np.array(states), shape=(
             1, TIME_STEPS, self._environment.stats.observation_dimension * len(self._agent_ids)))
         q = (tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)))
         q_by_agent = tf.reshape(q, shape=(len(self._agent_ids), self._environment.stats.action_dimension))
         max_q_values = np.max(q_by_agent, axis=1)
         max_q_actions = np.argmax(q_by_agent, axis=1)
         return {agent_id: (max_q_value, max_q_action) for agent_id, max_q_value, max_q_action in
-                zip(states.keys(), max_q_values, max_q_actions)}
+                zip(self._agent_ids, max_q_values, max_q_actions)}
 
     def save_models(self, name):
         if self._self_play:
@@ -197,11 +197,11 @@ class SACAgent:
             (actions, observation_prime, reward, done or truncated),action_probs)
 
     def _compute_actions_one_hot_and_prob(self, state, deterministic):
+        assert state.shape == (TIME_STEPS, len(self._agent_ids), self._environment.stats.observation_dimension)
         actions_one_hot, actions_probs, _ = list(zip(*[self.sample_actions(deterministic=deterministic,
                                                                            states=tf.expand_dims(
-                                                                               tf.convert_to_tensor(states), axis=0),
-                                                                           actor=self._actor) for agent_id, states in
-                                                       state.items()]))
+                                                                               tf.convert_to_tensor(state[:,index,:]), axis=0),
+                                                                           actor=self._actor) for index in range(len(self._agent_ids))]))
         return np.array(actions_one_hot), np.squeeze(np.array(actions_probs))
 
         actions = {

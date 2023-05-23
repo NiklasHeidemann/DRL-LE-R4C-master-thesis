@@ -35,8 +35,8 @@ class ExperienceReplayBuffer:
         return self._size >= self._batch_size
 
     def _add_state_transitions(self, state, state_):
-        self._state_memory[self._current_position] = np.array(list(state.values()))
-        self._state_prime_memory[self._current_position] = np.array(list(state_.values()))
+        self._state_memory[self._current_position] = state
+        self._state_prime_memory[self._current_position] = state_
     def add_transition(self, state, action, reward, state_, done):
             self._action_memory[self._current_position] = action
             self._reward_memory[self._current_position] = reward
@@ -62,10 +62,10 @@ class ExperienceReplayBuffer:
 class RecurrentExperienceReplayBuffer(ExperienceReplayBuffer):
     def __init__(self, state_dims, action_dims, agent_number: float, max_size=1000000, batch_size=256):
         super().__init__(state_dims=state_dims, action_dims=action_dims, agent_number=agent_number, max_size=max_size, batch_size=batch_size)
-        self._state_memory = np.zeros((self._max_size, agent_number,TIME_STEPS,*state_dims))
-        self._state_prime_memory = np.zeros((self._max_size,  agent_number,TIME_STEPS,*state_dims))
+        self._state_memory = np.zeros((self._max_size, TIME_STEPS,agent_number,*state_dims))
+        self._state_prime_memory = np.zeros((self._max_size, TIME_STEPS,agent_number,*state_dims))
 
     @override
     def _add_state_transitions(self, state, state_):
-            self._state_memory[self._current_position] = np.array(list(state.values()))
-            self._state_prime_memory[self._current_position] = np.array(list(state_.values()))
+            self._state_memory[self._current_position] = state
+            self._state_prime_memory[self._current_position] = state_
