@@ -11,7 +11,7 @@ from ipycanvas import Canvas
 from pettingzoo import ParallelEnv
 from pettingzoo.utils.env import ActionDict, ObsDict, AgentID
 
-from params import TIME_STEPS, SIZE_VOCABULARY, NUMBER_COMMUNICATION_CHANNELS
+from params import TIME_STEPS, SIZE_VOCABULARY, NUMBER_COMMUNICATION_CHANNELS, ACTIONS
 from environment.generator import WorldGenerator, PositionIndex
 from environment.stats import Stats
 from environment.reward import ComputeReward
@@ -42,15 +42,19 @@ class CoopGridWorld(ParallelEnv):
     _last_agent_actions: List[Dict[AgentID, str]] = None
     _last_observations: Dict[AgentID, deque[np.ndarray]] = None
     _type: str = None
-    def __init__(self, generator: WorldGenerator, compute_reward: ComputeReward):
+    _lock_first_goal: bool
+    _agents_locked: Dict[AgentID, int] = None
+    def __init__(self, generator: WorldGenerator, compute_reward: ComputeReward, lock_first_goal: bool):
         self._generator = generator
         self._compute_reward = compute_reward
+        self._lock_first_goal = lock_first_goal
     def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> ObsDict:
         self._grid, self._agent_positions, self._stats, self._type = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
         self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS for agent_id in self._stats.agent_ids})
         self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
+        self._agents_locked = {agent_id: -1 for agent_id in self._stats.agent_ids}
         return self.obs
 
 
@@ -58,8 +62,8 @@ class CoopGridWorld(ParallelEnv):
         visible_positions = self.stats.visible_positions(self._agent_positions[agent_id])
         grid_observation = np.reshape(newshape=(-1,),a=np.array([self._grid[position] if self._is_valid_position(position) else (np.zeros(shape=(self._stats.values_per_field)) -1) for position in visible_positions]))
         communication_observation = np.concatenate([self._communications[-1][agent_id]]+[communication for com_agent_id, communication in self._communications[-1].items() if com_agent_id!=agent_id])
-
-        return np.concatenate([grid_observation, communication_observation, self._stats.stats_observation])
+        coordinates = np.array([self._agent_positions[agent_id][0]/len(self._grid), self._agent_positions[agent_id][1]/len(self._grid[0])])
+        return np.concatenate([grid_observation, communication_observation, self._stats.stats_observation, coordinates])
 
     def _is_valid_position(self, position: Tuple[int, int])->bool:
         return position[0]>=0 and position[0]<len(self._grid) and position[1]>=0 and position[1]<len(self._grid[0])
@@ -73,48 +77,52 @@ class CoopGridWorld(ParallelEnv):
     def seed(self, seed=None):
         random.seed(seed)
 
-    def step(self, actions: Dict[AgentID, Tuple[str, Optional[List[int]]]]) -> Tuple[
-        ObsDict, Dict[str, float], Dict[str, bool], Dict[str, bool], Dict[str, dict]
+    def step(self,
+             actions: np.ndarray # dimensions: AgentID, Action+Communication
+             ) -> Tuple[
+        ObsDict, np.ndarray, bool, bool
     ]:
         self._stats.time_step+=1
         self._communications.append({})
         self._last_agent_actions.append({})
-        for agent_id, (movement, communication) in actions.items():
+        for index, agent_id in enumerate(self._stats.agent_ids):
+            movement = actions[index,:len(ACTIONS)]
             self._move_agent(agent_id=agent_id, movement=movement)
             self._last_agent_actions[-1][agent_id]=movement
-            self._communications[-1][agent_id] = np.array(communication)
-        reward_dict = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats)
-        is_terminated = max(reward_dict.values())>0
+            self._communications[-1][agent_id] = np.array(actions[index,len(ACTIONS):])
+        reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._agents_locked if self._lock_first_goal else None)
+        is_terminated = max(reward_array)>0
         is_truncated = self._stats.time_step >= self._stats.max_time_step
         for agent_id, obs in self._obs_dict.items():
             self._last_observations[agent_id].append(obs)
             self._last_observations[agent_id].popleft()
         return (
             self.obs,
-            reward_dict,
-            {agent_id: is_terminated for agent_id in self._stats.agent_ids},
-            {agent_id: is_truncated for agent_id in self._stats.agent_ids},
-            {agent_id: {} for agent_id in self._stats.agent_ids}, #info_dict
+            reward_array,
+            is_terminated,
+            is_truncated,
         )
-    def _move_agent(self, agent_id: str, movement: str):
+    def _move_agent(self, agent_id: str, movement: np.ndarray):
+        assert sum(movement)==1
         old_x, old_y = self._agent_positions[agent_id]
-        if movement == "HOLD":
+        if movement[0] == 1:# "HOLD":
             x, y = old_x, old_y
-        elif movement == "UP":
+        elif movement[1] == 1:#"UP":
             x, y = old_x - 1, old_y
-        elif movement == "DOWN":
+        elif movement[2] == 1:#"DOWN":
             x, y = old_x + 1, old_y
-        elif movement == "LEFT":
+        elif movement[3] == 1:#"LEFT":
             x, y = old_x, old_y - 1
-        elif movement == "RIGHT":
+        elif movement[4] == 1:#"RIGHT":
             x, y = old_x, old_y + 1
-        elif movement == "JUMP":
-            x, y = random.randint(0, self.stats.grid_size -1), random.randint(0, self.stats.grid_size -1)
         else:
             raise Exception(f"Invalid command {movement} for agent {agent_id} in timestep {self._stats.time_step}")
         if not self._is_valid_position(position=(x, y)):
             x, y = old_x, old_y
         self._agent_positions[agent_id] = (x, y)
+        if self._lock_first_goal and self._agents_locked[agent_id] <0 and sum(self._grid[x,y])>0:
+            self._agents_locked[agent_id] = np.argmax(self._grid[x,y])
+
 
     def render(self) -> RenderSave:
         grid = '\n'+'\n'.join([''.join([self._map_cell_to_char(pos=(x,y)) for y in range(self._grid.shape[1])]) for x in range(self._grid.shape[0])])
@@ -130,6 +138,9 @@ class CoopGridWorld(ParallelEnv):
     def stats(self)-> Stats:
         return self._stats
 
+    def _get_agent_colors(self)->Dict[AgentID, int]:
+        if self._lock_first_goal:
+            return self._agents_locked
     def _map_cell_to_char(self, pos: Tuple[int, int])->str:
         agent_on_spot = pos in self._agent_positions.values()
         cell = self._grid[pos]
@@ -140,7 +151,7 @@ class CoopGridWorld(ParallelEnv):
         return character.upper() if agent_on_spot else character
 
     def copy(self)->"CoopGridWorld":
-        env =  CoopGridWorld(generator=self._generator, compute_reward=self._compute_reward)
+        env =  CoopGridWorld(generator=self._generator, compute_reward=self._compute_reward, lock_first_goal=self._lock_first_goal)
         env._stats = self._stats
         return env
 

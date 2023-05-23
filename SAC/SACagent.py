@@ -9,7 +9,6 @@ from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
 from loss_logger import LossLogger, ALPHA_VALUES
 from params import ACTIONS, TIME_STEPS, SIZE_VOCABULARY
 
-
 class SACAgent:
     """
     Soft Actor-Critic (SAC) Agent
@@ -132,7 +131,7 @@ class SACAgent:
         q_r = tfm.minimum(q1, q2) - self._alpha * log_probs
         q_r_mean = tf.math.reduce_sum(action_probs * q_r, axis=1)
         targets = self._reward_scale * tf.reshape(rewards, q_r_mean.shape) + self._gamma * (
-                1 - tf.reshape(dones, q_r_mean.shape)) * q_r_mean
+                1 - tf.concat([dones,dones], axis=0)) * q_r_mean
         loss_1 = self._critic_update(self._critic_1, flattened_states, actions, targets)
         loss_2 = self._critic_update(self._critic_2, flattened_states, actions, targets)
         entropy = -tf.reduce_mean(tf.reduce_sum(action_probs * log_probs, axis=1))
@@ -147,7 +146,7 @@ class SACAgent:
         critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
         return loss
 
-    #@tf.function
+    @tf.function
     def train_step_actor(self, states) -> Tuple[float, float, float]:
         reshaped_states = tf.reshape(states, shape=self.agent_flattened_shape)
         if self._self_play:
@@ -169,7 +168,7 @@ class SACAgent:
             raise NotImplementedError()
 
 
-    #@tf.function
+    @tf.function
     def sample_actions(self, states, actor, deterministic=False):
         probability_groups = actor(states) # first one for actions, rest for communication channels
         probability_groups = probability_groups if type(probability_groups) == list else [probability_groups]
@@ -183,32 +182,40 @@ class SACAgent:
 
 
 
-    def act(self, state, env,  deterministic:bool, multitimer=None) -> Tuple[Tuple, Dict[str, np.ndarray]]:
+    def act(self, state, env,  deterministic:bool, multitimer=None) -> Tuple[Tuple, np.ndarray]:
         if multitimer is not None:
-            multitimer.start("tf")
+            multitimer.start("compute_action_dict")
+        #actions, actions_array, all_actions = self._compute_actions(state, deterministic)
+        actions, action_probs = self._compute_actions_one_hot_and_prob(state, deterministic)
+        if multitimer is not None:
+            multitimer.stop("compute_action_dict")
+            multitimer.start("env_step")
+        observation_prime, reward, done, truncated = env.step(actions)
+        if multitimer is not None:
+            multitimer.stop("env_step")
+        return (
+            (actions, observation_prime, reward, done or truncated),action_probs)
+
+    def _compute_actions_one_hot_and_prob(self, state, deterministic):
+        actions_one_hot, actions_probs, _ = list(zip(*[self.sample_actions(deterministic=deterministic,
+                                                                           states=tf.expand_dims(
+                                                                               tf.convert_to_tensor(states), axis=0),
+                                                                           actor=self._actor) for agent_id, states in
+                                                       state.items()]))
+        return np.array(actions_one_hot), np.squeeze(np.array(actions_probs))
+
         actions = {
             agent_id: self.sample_actions(deterministic=deterministic,
                 states=tf.expand_dims(tf.convert_to_tensor(states), axis=0), actor=self._actor) for agent_id, states in
             state.items()
         }
-        if multitimer is not None:
-            multitimer.stop("tf")
-            multitimer.start("env")
-        a = self._act({agent_id: actions[agent_id][0] for agent_id in self._agent_ids},env=env), {
-            agent_id: actions[agent_id][1] for agent_id in self._agent_ids}
-        if multitimer is not None:
-            multitimer.stop("env")
-        return a
-
-    def _act(self, all_actions, env):
+        all_actions = {agent_id: actions[agent_id][0] for agent_id in self._agent_ids}
         communications = {agent_id: tf.squeeze(action[len(ACTIONS):]) for agent_id, action in all_actions.items()}
-        selected_actions = {agent_id: ACTIONS[np.argmax(action[:len(ACTIONS)])] for agent_id, action in
+        selected_actions = {agent_id: ACTIONS[tf.argmax(action[:len(ACTIONS)])] for agent_id, action in
                             all_actions.items()}
-        actions_dict = {agent_id: (selected_actions[agent_id], communications[agent_id]) for agent_id in
+        actions_array = {agent_id: (selected_actions[agent_id], communications[agent_id]) for agent_id in
                         all_actions.keys()}
-        observation_prime, reward, done, truncated, _ = env.step(actions_dict)
-        return all_actions, observation_prime, reward, {agent_id: done[agent_id] or truncated[agent_id] for agent_id in
-                                                        self._agent_ids}
+        return actions, actions_array, all_actions
 
     def train_step_temperature(self, states):
         action_probs = self._actor(tf.reshape(states, shape=(self._batch_size * len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)))

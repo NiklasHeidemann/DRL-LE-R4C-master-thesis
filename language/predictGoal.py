@@ -17,18 +17,18 @@ class TrainPredictGoal:
         Xtrain, Xtest, ytrain, ytest = train_test_split(X,y, test_size=TEST_SIZE)
         classifier = RandomForestClassifier(random_state=SEED)
         classifier.fit(Xtrain, ytrain)
-        print("Balanced accuracy:", balanced_accuracy_score(ytest, classifier.predict(Xtest)))
+        print("Balanced accuracy:", balanced_accuracy_score(ytest, classifier.predict(Xtest)), "; Accuracy:", classifier.score(Xtest, ytest))
     def sample(self, environment: CoopGridWorld, agent: SACAgent):
         communications = []
         type_of_returns = []
         for index in range(NUMBER_SAMPLES):
             observation_dict = environment.reset()
             while True:
-                    (actions_dict, new_observation_dict, reward_dict, done_dict), _ = agent.act(
+                    (_, new_observation_dict, reward_array, done),_ = agent.act(
                         observation_dict, deterministic=True, env=environment)
                     observation_dict = new_observation_dict
-                    if False not in done_dict.values():
-                        if not sum(list(reward_dict.values()))> NEG_REWARD:
+                    if done:
+                        if not sum(reward_array)> NEG_REWARD:
                             break
                         all_communications = environment._communications
                         number_dummy_communications = max(0, 5-len(all_communications))

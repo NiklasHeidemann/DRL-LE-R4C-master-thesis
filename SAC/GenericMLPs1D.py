@@ -55,6 +55,3 @@ def create_q_network(learning_rate, state_dim, action_dim, agent_num: int, numbe
     model.compile(optimizer=Adam(learning_rate=learning_rate))
     return model
 
-
-# todo parallelisierung
-#todo lstm

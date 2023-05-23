@@ -1,27 +1,20 @@
-import multiprocessing
 from collections import defaultdict
-import datetime
 from collections import defaultdict
-from functools import partial
-from multiprocessing import Process
 from threading import Thread
-from typing import List, Tuple, Dict
+from typing import List, Dict
 
 import numpy as np
 import tensorflow as tf
-from tensorflow import math as tfm
-from tensorflow_probability import distributions as tfd
 
 from SAC.ExperienceReplayBuffer import RecurrentExperienceReplayBuffer
 from SAC.SACagent import SACAgent
+from environment.env import RenderSaveExtended
 from environment.render import render_permanently
-from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, OTHER_ACTOR_LOSS, \
-    MAX_Q_VALUES, ALPHA_VALUES, ENTROPY
-from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA, TARGET_ENTROPY, \
-    PARALLEL_ENVS
+from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, MAX_Q_VALUES, ALPHA_VALUES, \
+    ENTROPY
+from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA, TARGET_ENTROPY
 from plots import plot_multiple
 from timer import Timer, MultiTimer
-
 
 class Trainer:
     """
@@ -36,7 +29,7 @@ class Trainer:
         signature: learning_rate, state_dim, action_dim -> tensorflow Model
     :param critic_network_generator: a generator function for the critic networks (Q-networks)
         signature: learning_rate, state_dim, action_dim -> tensorflow Model
-    :param learning_rate=0.0003: Learning rate for adam optimizer. # todo testing by kl-divergence
+    :param learning_rate=0.0003: Learning rate for adam optimizer.
         The same learning rate will be used for all networks (Q-Values, Actor)
     :param gamma=0.99: discount factor
     :param tau=0.005:  Polyak averaging coefficient (between 0 and 1)
@@ -68,9 +61,54 @@ class Trainer:
         if from_save:
             self._agent.load_models(name="")
 
+    def _prepare_logging(self):
+        self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
+        self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
+        self._loss_logger.add_lists([RETURNS]+self._environment.types, smoothed=1000)
+        self._last_render_as_list = []
+        thread = Thread(target=render_permanently, args=[self._last_render_as_list])
+        thread.start()
+
+    def _env_step(self, observation_dict, multitimer: MultiTimer, ret: float):
+        (actions_array, new_observation_dict, reward_array, done), action_probs = self._agent.act(
+            observation_dict, deterministic=False, env=self._environment, multitimer=multitimer)
+        self._replay_buffer.add_transition(state=observation_dict, action=actions_array,
+                                           reward=reward_array,
+                                           state_=new_observation_dict, done=done)
+        observation_dict = new_observation_dict
+        ret += sum(reward_array)
+        return observation_dict, ret, done, action_probs
+
+    def _extend_render_save(self, epoch: int, render_save: List[RenderSaveExtended], action_probs, observation_dict: Dict[str, np.ndarray]):
+        if epoch % 10 == 0:
+            render_save.append((self._environment.render(), action_probs,
+                 self._agent._get_max_q_value(states=observation_dict)))
+    def _reset_env(self, epoch: int, steps_total: int, render_save: List[RenderSaveExtended], ret: float):
+            if epoch % 10 == 0:
+                print("epoch:", epoch, "steps:", steps_total,
+                      "actor-loss: {:.2f}".format(self._loss_logger.last(ACTOR_LOSS)),
+                      "critic-loss: {:.2f}".format(self._loss_logger.last(CRITIC_LOSS)),
+                      "return: {:.2f}".format(self._loss_logger.last(RETURNS)),
+                      "avg return: {:.2f}".format(self._loss_logger.avg_last(RETURNS, 10)))
+                self._last_render_as_list.append(render_save)
+                render_save = []
+                if len(self._last_render_as_list) > 1:
+                    self._last_render_as_list.pop(0)
+            self._loss_logger.add_value(identifier=RETURNS, value=ret)
+            self._loss_logger.add_value(identifier=self._environment.current_type, value=ret)
+            ret = 0
+            observation_dict = self._environment.reset()
+            epoch += 1
+            self._extend_render_save(epoch=epoch, render_save=render_save, action_probs=np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension)), observation_dict=observation_dict)
+            if epoch % 1000 == 0:
+                self.test(n_samples=20, verbose_samples=0)
+                self._agent.save_models(name="")
+                thread = Thread(target=plot_multiple, args=[self._loss_logger.all_smoothed()])
+                thread.start()
+            return observation_dict, epoch, ret
+
     def train(self, epochs, environment_steps_before_training, pre_sampling_steps, training_steps_per_update=1):
-        # todo refactor this
-        # gym wrappen for multiprocessing alternativ ray alternativ (wenn cheap: einfach hundert environments sequentiell)
+        # todo gym wrappen for multiprocessing alternativ ray alternativ (wenn cheap: einfach hundert environments sequentiell)
         # vorher schauen wo die Zeit herkommt
         # xenias idee ist trivialer
         # loggen aber richtig
@@ -88,18 +126,13 @@ class Trainer:
         :param pre_sampling_steps=1024: Number of exploration steps sampled to the replay buffer before training starts
         """
         self._pre_sample(pre_sampling_steps=pre_sampling_steps)
+        self._prepare_logging()
         print("start training!")
-        self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
-        self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
-        self._loss_logger.add_lists([RETURNS]+self._environment.types, smoothed=1000)
-        self._last_render_as_list = []
-        thread = Thread(target=render_permanently, args=[self._last_render_as_list])
-        thread.start()
 
         observation_dict = self._environment.reset()
         # default values for first iteration:
-        done_dict = {"": False}
-        action_probs = defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS))))
+        done = False
+        action_probs: Dict[str, np.ndarray] = np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension))
         ret = 0
 
         render_save = []
@@ -109,48 +142,19 @@ class Trainer:
             with MultiTimer(desc="tensorflow") as multitimer:
                 steps = 0
                 while steps < environment_steps_before_training:
-                    if epoch % 10 == 0:
-                        render_save.append(
-                            (self._environment.render(), action_probs,
-                             self._agent._get_max_q_value(states=observation_dict)))
-                    if False not in done_dict.values():
-                        if epoch % 10 == 0:
-                            print("epoch:", epoch, "steps:", steps_total,
-                                  "actor-loss: {:.2f}".format(self._loss_logger.last(ACTOR_LOSS)),
-                                  "critic-loss: {:.2f}".format(self._loss_logger.last(CRITIC_LOSS)),
-                                  "return: {:.2f}".format(self._loss_logger.last(RETURNS)),
-                                  "avg return: {:.2f}".format(self._loss_logger.avg_last(RETURNS, 10)))
-                            self._last_render_as_list.append(render_save)
-                            render_save = []
-                            if len(self._last_render_as_list) > 1:
-                                self._last_render_as_list.pop(0)
-                        self._loss_logger.add_value(identifier=RETURNS, value=ret)
-                        self._loss_logger.add_value(identifier=self._environment.current_type, value=ret)
-                        ret = 0
-                        observation_dict = self._environment.reset()
-                        epoch += 1
-                        if epoch % 10 == 0:
-                            render_save.append(
-                                (self._environment.render(),
-                                 defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS)))),
-                                 self._agent._get_max_q_value(states=observation_dict)))
-                        if epoch % 1000 == 0:
-                            self.test(n_samples=20, verbose_samples=0)
-                            self._agent.save_models(name="")
-                            thread = Thread(target=plot_multiple, args=[self._loss_logger.all_smoothed()])
-                            thread.start()
+                    self._extend_render_save(epoch=epoch, render_save=render_save, action_probs=action_probs, observation_dict=observation_dict)
+                    if done:
+                        observation_dict, epoch, ret =self._reset_env(epoch=epoch, steps_total=steps_total, render_save=render_save, ret=ret)
                         if epoch >= epochs:
                             print("training finished!")
                             return
-                    (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act(
-                        observation_dict, deterministic=False, env=self._environment,multitimer=multitimer)
-                    self._replay_buffer.add_transition(state=observation_dict, action=actions_dict,
-                                                       reward=reward_dict,
-                                                       state_=new_observation_dict, done=done_dict)
-                    observation_dict = new_observation_dict
+                    observation_dict, ret, done, action_probs = self._env_step(
+                        observation_dict=observation_dict, multitimer=multitimer, ret=ret
+                    )
                     steps += 1
                     steps_total += 1
-                    ret += sum(reward_dict.values())
+
+
 
             for _ in range(training_steps_per_update):
                 with Timer(desc="learn"):
@@ -167,7 +171,7 @@ class Trainer:
                     self._batch_size, len(self._agent_ids) * self._environment.stats.action_dimension)),
                 rewards=tf.reshape(tensor=rewards, shape=(self._batch_size, len(self._agent_ids))),
                 states_prime=tf.reshape(tensor=states_prime, shape=self.extended_shape),
-                dones=tf.reshape(tensor=dones, shape=(self._batch_size, len(self._agent_ids))),
+                dones=tf.reshape(tensor=dones, shape=(self._batch_size)),
             )
             #self._agent.train_step_temperature(states)
             self._agent.update_target_weights()
@@ -176,8 +180,6 @@ class Trainer:
                  MAX_Q_VALUES: max_q_values, ENTROPY: entropy})
         self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES, MAX_Q_VALUES, ENTROPY])
 
-    # todo free-for-all szenarien
-    # todo relatedwork section skizzieren
     # todo sachen auf notion packen
 
     def _pre_sample(self, pre_sampling_steps: int):
@@ -185,12 +187,12 @@ class Trainer:
         observation_dict = self._environment.reset()
         ret = 0
         for _ in range(pre_sampling_steps):
-            (actions_dict, new_observation_dict, reward_dict, done_dict), _ = self._agent.act(observation_dict,
+            (actions_array, new_observation_dict, reward_array, done), _ = self._agent.act(observation_dict,
                                                                                               deterministic=False, env=self._environment)
-            ret += sum(reward_dict.values())
-            self._replay_buffer.add_transition(state=observation_dict, action=actions_dict, reward=reward_dict,
-                                               state_=new_observation_dict, done=done_dict)
-            if False not in done_dict.values():
+            ret += sum(reward_array)
+            self._replay_buffer.add_transition(state=observation_dict, action=actions_array, reward=reward_array,
+                                               state_=new_observation_dict, done=done)
+            if done:
                 ret = 0
                 observation_dict = self._environment.reset()
             else:
@@ -206,12 +208,10 @@ class Trainer:
             while True:
                 if index < verbose_samples:
                     render_save.append((self._environment.render(), action_probs))
-                (actions_dict, new_observation_dict, reward_dict, done_dict), action_probs = self._agent.act(
+                (actions_array, new_observation_dict, reward_array, done), action_probs = self._agent.act(
                     observation_dict, deterministic=True, env=self._environment)
-                if index < verbose_samples:
-                    print(actions_dict)
-                return_ += sum(reward_dict.values())
-                if False not in done_dict.values():
+                return_ += sum(reward_array)
+                if done:
                     returns.append(return_)
                     if index < verbose_samples:
                         render_save.append(self._environment.render())

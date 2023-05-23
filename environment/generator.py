@@ -108,14 +108,19 @@ class ChoiceWorldGenerator(WorldGenerator):
         stats.number_of_used_colors = self._number_of_object_colors
         indexes_1 = [(1,1),(1,3),(3,1),(3,3)]
         indexes_2 = [(5,7),(7,9),(7,5),(9,7)]
+        used_colors = set()
         for x,y in indexes_1:
             object_color = random.randint(0, stats.number_of_used_colors-1)
             grid[(x,y,object_color)] = 1
-        mode = random.randrange(0,stats.number_of_used_colors+0)
+            used_colors.add(object_color)
+        mode = None
+        while mode not in used_colors:
+            mode = random.randrange(0,stats.number_of_used_colors+0)
         for x,y in indexes_2:
             if mode<stats.number_of_used_colors:
                 grid[(x,y,mode)] = 1
             else:
+                raise NotImplementedError()
                 object_color = random.randint(0, stats.number_of_used_colors-1)
                 grid[(x,y,object_color)] = 1
         return grid

@@ -25,8 +25,8 @@ class ExperienceReplayBuffer:
         self._state_memory = np.zeros((self._max_size, agent_number,*state_dims))
         self._state_prime_memory = np.zeros((self._max_size, agent_number,*state_dims))
         self._action_memory = np.zeros((self._max_size, agent_number,action_dims))
-        self._reward_memory = np.zeros((self._max_size, agent_number, 1))
-        self._done_memory = np.zeros((self._max_size, agent_number,1), dtype=bool)
+        self._reward_memory = np.zeros((self._max_size, agent_number))
+        self._done_memory = np.zeros((self._max_size, 1), dtype=bool)
 
     def size(self):
         return self._size
@@ -38,9 +38,9 @@ class ExperienceReplayBuffer:
         self._state_memory[self._current_position] = np.array(list(state.values()))
         self._state_prime_memory[self._current_position] = np.array(list(state_.values()))
     def add_transition(self, state, action, reward, state_, done):
-            self._action_memory[self._current_position] = list(action.values())
-            self._reward_memory[self._current_position] = np.array(list(reward.values())).reshape((-1,1))
-            self._done_memory[self._current_position] = np.array(list(done.values())).reshape((-1,1))
+            self._action_memory[self._current_position] = action
+            self._reward_memory[self._current_position] = reward
+            self._done_memory[self._current_position] = done
             self._add_state_transitions(state=state,state_=state_)
             if self._size < self._max_size:
                 self._size += 1
