@@ -12,7 +12,7 @@ import matplotlib
 from language.predictGoal import TrainPredictGoal
 from params import NUMBER_COMMUNICATION_CHANNELS, SIZE_VOCABULARY, VISIBLE_POSITIONS, \
     NUMBER_OF_BIG_LAYERS, NUMBER_OF_AGENTS, MAX_REPLAY_BUFFER_SIZE, SEED, EPOCHS, PRE_SAMPLING_STEPS, \
-    ENVIRONMENT_STEPS_PER_TRAINING, SELF_PLAY, RECURRENT, FROM_SAVE, WORLD_GENERATOR, LOCK_FIRST_GOAL
+    ENVIRONMENT_STEPS_PER_TRAINING, SELF_PLAY, RECURRENT, FROM_SAVE, WORLD_GENERATOR, LOCK_FIRST_GOAL, RENDER
 
 matplotlib.use("agg")
 random.seed(SEED)
@@ -40,6 +40,6 @@ sac_agent = Trainer(environment=env, from_save=FROM_SAVE, self_play=SELF_PLAY, a
 sac_agent._agent._critic_1.summary()
 sac_agent._agent._actor.summary() if SELF_PLAY else sac_agent._agent._actors["0"].summary()
 sac_agent.test(n_samples=2, verbose_samples=0)
-sac_agent.train(epochs=EPOCHS, pre_sampling_steps=PRE_SAMPLING_STEPS, environment_steps_before_training=ENVIRONMENT_STEPS_PER_TRAINING)
+sac_agent.train(epochs=EPOCHS, pre_sampling_steps=PRE_SAMPLING_STEPS, environment_steps_before_training=ENVIRONMENT_STEPS_PER_TRAINING, render=RENDER)
 sac_agent.test(n_samples=20, verbose_samples=0)
 TrainPredictGoal()(environment=env,agent=sac_agent._agent)

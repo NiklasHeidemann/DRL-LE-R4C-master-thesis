@@ -1,20 +1,15 @@
 import random
-from collections import defaultdict, deque
+from collections import deque
 from typing import List, Tuple, Dict, Optional
 
-import pygame as pygame
-from babyrobot.envs.lib import GridLevel
-import matplotlib.pyplot as plt
-
 import numpy as np
-from ipycanvas import Canvas
 from pettingzoo import ParallelEnv
-from pettingzoo.utils.env import ActionDict, ObsDict, AgentID
+from pettingzoo.utils.env import AgentID
 
-from params import TIME_STEPS, SIZE_VOCABULARY, NUMBER_COMMUNICATION_CHANNELS, ACTIONS
 from environment.generator import WorldGenerator, PositionIndex
-from environment.stats import Stats
 from environment.reward import ComputeReward
+from environment.stats import Stats
+from params import TIME_STEPS, SIZE_VOCABULARY, NUMBER_COMMUNICATION_CHANNELS, ACTIONS
 
 RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], Dict[AgentID, np.ndarray], int]
 RenderSaveExtended = Tuple[RenderSave, np.ndarray, Dict[AgentID, Tuple[float,float]]]

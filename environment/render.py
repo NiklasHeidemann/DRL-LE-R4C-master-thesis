@@ -8,10 +8,11 @@ import numpy as np
 
 from environment.env import RenderSave, RenderSaveExtended, _map_communication_to_str
 from environment.generator import PositionIndex
-from params import ACTIONS
+from params import ACTIONS, RENDER
 
-window = pygame.display.set_mode((1000, 500))
-pygame.font.init()
+if RENDER:
+    window = pygame.display.set_mode((1000, 500))
+    pygame.font.init()
 def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index: int, max_q_value: Dict[str, Tuple[float,float]], log_dir: str):
     grid, agent_positions, last_agent_movements, last_communication, timestep = save
     global window

@@ -7,7 +7,8 @@ from tensorflow import math as tfm
 
 from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
 from loss_logger import LossLogger, ALPHA_VALUES
-from params import ACTIONS, TIME_STEPS, SIZE_VOCABULARY
+from params import ACTIONS, TIME_STEPS, SIZE_VOCABULARY, ENV_PARALLEL
+
 
 class SACAgent:
     """
@@ -115,7 +116,7 @@ class SACAgent:
         target_network.set_weights(new_wights)
 
 
-    #@tf.function
+    @tf.function
     def train_step_critic(self, states, actions, rewards, states_prime, dones):
         _, action_probs, log_probs = self.sample_actions(tf.reshape(states_prime,
                                                                                                     shape=(
@@ -174,14 +175,26 @@ class SACAgent:
         probability_groups = probability_groups if type(probability_groups) == list else [probability_groups]
         log_prob_groups = [tf.math.log(probabilities) for probabilities in probability_groups]
         if deterministic:
-            action_groups = [tf.argmax(probabilities, axis=-1)[0] for probabilities in probability_groups]
+            action_groups = [tf.argmax(probabilities, axis=1) for probabilities in probability_groups]
         else:
-            action_groups = [tf.random.categorical(logits=log_probs, num_samples=1)[0,0] for log_probs in log_prob_groups]
+            action_groups = [tf.random.categorical(logits=log_probs, num_samples=1)[:,0] for log_probs in log_prob_groups]
         one_hot_action_groups = [tf.one_hot(actions, depth=probabilities.shape[-1]) for actions, probabilities in zip(action_groups,probability_groups)]
-        return tf.concat(one_hot_action_groups,axis=-1), tf.concat(probability_groups,axis=-1), tf.concat(log_prob_groups,axis=-1)
+        return tf.squeeze(tf.concat(one_hot_action_groups,axis=-1)), tf.concat(probability_groups,axis=-1), tf.concat(log_prob_groups,axis=-1)
 
 
-
+    def act_batched(self, batched_state, env_batcher,  deterministic:bool, multitimer=None) -> Tuple[Tuple, np.ndarray]:
+        if multitimer is not None:
+            multitimer.start("batch_compute_action_dict")
+        #actions, actions_array, all_actions = self._compute_actions(state, deterministic)
+        batched_actions, batched_action_probs = self._wrap_batched_compute_actions_one_hot_and_prob(batched_state, deterministic)
+        if multitimer is not None:
+            multitimer.stop("batch_compute_action_dict")
+            multitimer.start("env_step")
+        observation_prime, reward, done, truncated = env_batcher.step(batched_actions)
+        if multitimer is not None:
+            multitimer.stop("env_step")
+        return (
+            (batched_actions, observation_prime, reward, tf.math.logical_or(done, truncated)),batched_action_probs)
     def act(self, state, env,  deterministic:bool, multitimer=None) -> Tuple[Tuple, np.ndarray]:
         if multitimer is not None:
             multitimer.start("compute_action_dict")
@@ -195,6 +208,17 @@ class SACAgent:
             multitimer.stop("env_step")
         return (
             (actions, observation_prime, reward, done or truncated),action_probs)
+
+
+    def _wrap_batched_compute_actions_one_hot_and_prob(self, state, deterministic):
+        actions_one_hot, actions_probs = self._batched_compute_actions_one_hot_and_prob(state, deterministic)
+        return np.moveaxis(np.array(actions_one_hot), 0, 1), np.moveaxis(np.array(actions_probs), 0, 1)
+    @tf.function
+    def _batched_compute_actions_one_hot_and_prob(self, state, deterministic):
+        actions_one_hot, actions_probs, _ = list(zip(*[self.sample_actions(deterministic=deterministic,
+                                                                           states= tf.convert_to_tensor(state[:,:,index,:]),
+                                                                           actor=self._actor) for index in range(len(self._agent_ids))]))
+        return actions_one_hot, actions_probs
 
     def _compute_actions_one_hot_and_prob(self, state, deterministic):
         assert state.shape == (TIME_STEPS, len(self._agent_ids), self._environment.stats.observation_dimension)

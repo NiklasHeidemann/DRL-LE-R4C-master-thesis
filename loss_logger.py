@@ -39,6 +39,10 @@ class LossLogger:
         for identifier, value in dict_.items():
             self.add_value(identifier=identifier,value=value)
 
+    def add_value_list(self, identifier: str, values: List[Any])->None:
+        for value in values:
+            self.add_value(identifier=identifier,value=value)
+
     def add_aggregatable_value(self, identifier: str, value: float)->None:
         self._aggregator[identifier].append(value)
 

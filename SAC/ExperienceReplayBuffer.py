@@ -37,6 +37,11 @@ class ExperienceReplayBuffer:
     def _add_state_transitions(self, state, state_):
         self._state_memory[self._current_position] = state
         self._state_prime_memory[self._current_position] = state_
+
+    def _add_state_transition_batch(self, state, state_):
+        self._state_memory[self._current_position: self._current_position+state.shape[0]] = state
+        self._state_prime_memory[self._current_position: self._current_position+state.shape[0]] = state_
+
     def add_transition(self, state, action, reward, state_, done):
             self._action_memory[self._current_position] = action
             self._reward_memory[self._current_position] = reward
@@ -45,6 +50,25 @@ class ExperienceReplayBuffer:
             if self._size < self._max_size:
                 self._size += 1
             self._current_position = (self._current_position + 1) % self._max_size
+
+    def add_transition_batch(self, state, action, reward, state_, done):
+            if self._current_position + state.shape[0] > self._max_size:
+                self.add_transition_batch(state=state[:self._max_size-self._current_position],
+                                          action=action[:self._max_size-self._current_position],
+                                          reward=reward[:self._max_size-self._current_position],
+                                          state_=state_[:self._max_size-self._current_position],
+                                          done=done[:self._max_size-self._current_position])
+                self.add_transition_batch(state=state[self._max_size-self._current_position:],
+                        action=action[self._max_size-self._current_position:],reward=reward[self._max_size-self._current_position:],state_=state_[self._max_size-self._current_position:],done=done[self._max_size-self._current_position:])
+                return
+            index = (self._current_position,self._current_position+state.shape[0])
+            self._action_memory[index[0]:index[1]] = action
+            self._reward_memory[index[0]:index[1]] = reward
+            self._done_memory[index[0]:index[1]] = tf.expand_dims(done,axis=1)
+            self._add_state_transition_batch(state=state,state_=state_)
+            self._size = min(self._max_size, self._size + state.shape[0])
+            self._current_position = (self._current_position + state.shape[0]) % self._max_size
+
 
     def sample_batch(self):
         batch_indices = np.random.choice(self._size, self._batch_size, replace=False)
