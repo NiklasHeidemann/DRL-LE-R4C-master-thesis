@@ -37,12 +37,14 @@ class CoopGridWorld(ParallelEnv):
     _last_agent_actions: List[Dict[AgentID, str]] = None
     _last_observations: deque[np.ndarray] = None
     _type: str = None
-    _lock_first_goal: bool
+    _xenia_lock: bool = None
+    _xenia_permanence: bool = None
     _agents_locked: Dict[AgentID, int] = None
-    def __init__(self, generator: WorldGenerator, compute_reward: ComputeReward, lock_first_goal: bool):
+    def __init__(self, generator: WorldGenerator, compute_reward: ComputeReward, xenia_lock: bool, xenia_permanence: bool):
         self._generator = generator
         self._compute_reward = compute_reward
-        self._lock_first_goal = lock_first_goal
+        self._xenia_lock = xenia_lock
+        self._xenia_permanence = xenia_permanence
 
     def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> np.ndarray:
         self._grid, self._agent_positions, self._stats, self._type = self._generator(last_stats=self._stats)
@@ -87,7 +89,7 @@ class CoopGridWorld(ParallelEnv):
             self._move_agent(agent_id=agent_id, movement=movement)
             self._last_agent_actions[-1][agent_id]=movement
             self._communications[-1][agent_id] = np.array(actions[index,len(ACTIONS):])
-        reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._agents_locked if self._lock_first_goal else None)
+        reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._agents_locked if self._xenia_lock else None)
         is_terminated = max(reward_array)>0
         is_truncated = self._stats.time_step >= self._stats.max_time_step
         self._last_observations.append(self._obs_array)
@@ -116,7 +118,7 @@ class CoopGridWorld(ParallelEnv):
         if not self._is_valid_position(position=(x, y)):
             x, y = old_x, old_y
         self._agent_positions[agent_id] = (x, y)
-        if self._lock_first_goal and self._agents_locked[agent_id] <0 and sum(self._grid[x,y])>0:
+        if self._xenia_lock and ((not self._xenia_permanence) or self._agents_locked[agent_id] <0) and sum(self._grid[x,y])>0:
             self._agents_locked[agent_id] = np.argmax(self._grid[x,y])
 
 
@@ -135,7 +137,7 @@ class CoopGridWorld(ParallelEnv):
         return self._stats
 
     def _get_agent_colors(self)->Dict[AgentID, int]:
-        if self._lock_first_goal:
+        if self._xenia_lock:
             return self._agents_locked
     def _map_cell_to_char(self, pos: Tuple[int, int])->str:
         agent_on_spot = pos in self._agent_positions.values()
@@ -147,7 +149,7 @@ class CoopGridWorld(ParallelEnv):
         return character.upper() if agent_on_spot else character
 
     def copy(self)->"CoopGridWorld":
-        env =  CoopGridWorld(generator=self._generator, compute_reward=self._compute_reward, lock_first_goal=self._lock_first_goal)
+        env =  CoopGridWorld(generator=self._generator, compute_reward=self._compute_reward, xenia_lock=self._xenia_lock, xenia_permanence=self._xenia_permanence)
         env._stats = self._stats
         return env
 
