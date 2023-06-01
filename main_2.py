@@ -12,7 +12,7 @@ import matplotlib
 from language.predictGoal import TrainPredictGoal
 from params import NUMBER_COMMUNICATION_CHANNELS, SIZE_VOCABULARY, VISIBLE_POSITIONS, \
     NUMBER_OF_BIG_LAYERS, NUMBER_OF_AGENTS, MAX_REPLAY_BUFFER_SIZE, SEED, EPOCHS, PRE_SAMPLING_STEPS, \
-    ENVIRONMENT_STEPS_PER_TRAINING, SELF_PLAY, RECURRENT, FROM_SAVE, WORLD_GENERATOR, LOCK_FIRST_GOAL
+    ENVIRONMENT_STEPS_PER_TRAINING, SELF_PLAY, RECURRENT, FROM_SAVE, WORLD_GENERATOR, XENIA_LOCK, XENIA_PERMANENCE
 
 matplotlib.use("agg")
 random.seed(SEED)
@@ -25,7 +25,7 @@ choice_world_generator = ChoiceWorldGenerator(seed=SEED)
 multi_world_generator = MultiGenerator(generators=[random_world_generator, choice_world_generator])
 selected_world_generator = multi_world_generator if WORLD_GENERATOR == "multi" else (random_world_generator if WORLD_GENERATOR == "random" else (choice_world_generator if WORLD_GENERATOR == "choice" else None))
 
-env = CoopGridWorld(generator=selected_world_generator, compute_reward=compute_reward, lock_first_goal=LOCK_FIRST_GOAL)
+env = CoopGridWorld(generator=selected_world_generator, compute_reward=compute_reward, xenia_lock=XENIA_LOCK, xenia_permanence=XENIA_PERMANENCE)
 env.stats.number_communication_channels = NUMBER_COMMUNICATION_CHANNELS
 env.stats.size_vocabulary = SIZE_VOCABULARY
 env.stats.visible_positions = VISIBLE_POSITIONS
