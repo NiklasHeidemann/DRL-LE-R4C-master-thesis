@@ -24,17 +24,19 @@ class Stats:
     @property
     def stats_observation(self)->np.ndarray:
         #return np.array([self.grid_size, self.number_of_agents, self.number_of_objects, self.number_of_used_colors, self.time_step])
-        return np.array([self.max_time_step/30, self.time_step, self.number_of_used_colors/self.size_vocabulary])
+        return np.array([self.max_time_step/30, self.time_step/self.max_time_step, self.number_of_used_colors/self.size_vocabulary])
 
     @property
     def number_of_visible_positions(self)->int:
         return len(self.visible_positions((0,0)))
     @property
     def observation_dimension(self)->int:
-        return self.number_of_visible_positions*self.values_per_field \
-            +(self.size_vocabulary+1)*self.number_communication_channels*self.number_of_agents \
-            + len(self.stats_observation) \
-            + 2 #coordinates
+        return (self.number_of_visible_positions*self.values_per_field
+            +(self.size_vocabulary+1)*self.number_communication_channels*self.number_of_agents
+            + len(self.stats_observation)
+            + 2 +#coordinates
+            + self.values_per_field # locked color
+                )
 
     @property
     def action_dimension(self)->int:

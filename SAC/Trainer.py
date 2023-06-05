@@ -63,6 +63,7 @@ class Trainer:
         self._agent_ids = agent_ids
         if from_save:
             self._agent.load_models(name="")
+            self._loss_logger.load(path="logger")
 
     def _prepare_logging(self):
         self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
@@ -83,7 +84,7 @@ class Trainer:
         return observation_array, return_array, done, action_probs[0]
 
     def _extend_render_save(self, render_save: List[RenderSaveExtended], action_probs, observation_array: np.ndarray):
-        render_save.append((self._environment.render(), action_probs,
+        render_save.append((self._env_batcher.render(index=0), action_probs,
                  self._agent._get_max_q_value(states=observation_array)))
     def _reset_env(self, epoch_array: List[int], steps_total: int, render_save: List[RenderSaveExtended], render: bool, return_array: np.ndarray, done_mask: List[bool], observation_array: np.ndarray):
             if done_mask[0]:
@@ -102,11 +103,12 @@ class Trainer:
             return_array[done_mask] = 0
             observation_array = self._env_batcher.reset(observation_array=observation_array, mask=done_mask)
             epoch_array[done_mask] += ENV_PARALLEL
-            if render:
+            if render and done_mask[0]:
                 self._extend_render_save(render_save=render_save, action_probs=np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension)), observation_array=observation_array[0])
             if epoch_array[0] % (ENV_PARALLEL*100) == 0 and done_mask[0]:
                 self.test(n_samples=20, verbose_samples=0)
                 self._agent.save_models(name="")
+                self._loss_logger.save(path="logger")
                 thread = Thread(target=plot_multiple, args=[self._loss_logger.all_smoothed()])
                 thread.start()
             return observation_array, epoch_array, return_array
@@ -165,7 +167,7 @@ class Trainer:
         for _ in range(TRAININGS_PER_TRAINING):
             states, actions, rewards, states_prime, dones = self._replay_buffer.sample_batch()
             actor_loss, q_values, max_q_values = self._agent.train_step_actor(states)
-            critic_loss, log_probs, entropy = self._agent.train_step_critic(
+            critic_loss, abs_1, abs_2, log_probs, entropy = self._agent.train_step_critic(
                 states=tf.reshape(tensor=states, shape=self.extended_shape),
                 actions=tf.reshape(tensor=actions, shape=(
                     self._batch_size, len(self._agent_ids) * self._environment.stats.action_dimension)),
@@ -173,6 +175,7 @@ class Trainer:
                 states_prime=tf.reshape(tensor=states_prime, shape=self.extended_shape),
                 dones=tf.reshape(tensor=dones, shape=(self._batch_size)),
             )
+            print(critic_loss, abs_1, abs_2)
             #self._agent.train_step_temperature(states)
             self._agent.update_target_weights()
             self._loss_logger.add_aggregatable_values(

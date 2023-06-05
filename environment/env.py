@@ -1,7 +1,7 @@
 import random
 from collections import deque
 from typing import List, Tuple, Dict, Optional
-
+import tensorflow as tf
 import numpy as np
 from pettingzoo import ParallelEnv
 from pettingzoo.utils.env import AgentID
@@ -51,9 +51,9 @@ class CoopGridWorld(ParallelEnv):
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
         self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS for agent_id in self._stats.agent_ids})
+        self._agents_locked = {agent_id: -1 for agent_id in self._stats.agent_ids}
         #self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
         self._last_observations = deque([self._obs_array]*TIME_STEPS)
-        self._agents_locked = {agent_id: -1 for agent_id in self._stats.agent_ids}
         return self.obs
 
 
@@ -62,7 +62,8 @@ class CoopGridWorld(ParallelEnv):
         grid_observation = np.reshape(newshape=(-1,),a=np.array([self._grid[position] if self._is_valid_position(position) else (np.zeros(shape=(self._stats.values_per_field)) -1) for position in visible_positions]))
         communication_observation = np.concatenate([self._communications[-1][agent_id]]+[communication for com_agent_id, communication in self._communications[-1].items() if com_agent_id!=agent_id])
         coordinates = np.array([self._agent_positions[agent_id][0]/len(self._grid), self._agent_positions[agent_id][1]/len(self._grid[0])])
-        return np.concatenate([grid_observation, communication_observation, self._stats.stats_observation, coordinates])
+        selected_colour = tf.one_hot(self._agents_locked[agent_id],depth=self.stats.values_per_field) if self._xenia_lock else np.zeros(shape=(self.stats.number_of_used_colors))
+        return np.concatenate([grid_observation, communication_observation, self._stats.stats_observation, coordinates, selected_colour])
 
     def _is_valid_position(self, position: Tuple[int, int])->bool:
         return position[0]>=0 and position[0]<len(self._grid) and position[1]>=0 and position[1]<len(self._grid[0])
@@ -101,7 +102,7 @@ class CoopGridWorld(ParallelEnv):
             is_truncated,
         )
     def _move_agent(self, agent_id: str, movement: np.ndarray):
-        assert sum(movement)==1
+        assert sum(movement)==1, movement
         old_x, old_y = self._agent_positions[agent_id]
         if movement[0] == 1:# "HOLD":
             x, y = old_x, old_y

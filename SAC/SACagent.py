@@ -133,10 +133,10 @@ class SACAgent:
         q_r_mean = tf.math.reduce_sum(action_probs * q_r, axis=1)
         targets = self._reward_scale * tf.reshape(rewards, q_r_mean.shape) + self._gamma * (
                 1 - tf.concat([dones,dones], axis=0)) * q_r_mean
-        loss_1 = self._critic_update(self._critic_1, flattened_states, actions, targets)
-        loss_2 = self._critic_update(self._critic_2, flattened_states, actions, targets)
+        loss_1, abs_11, abs_12 = self._critic_update(self._critic_1, flattened_states, actions, targets)
+        loss_2, abs_21, abs_22 = self._critic_update(self._critic_2, flattened_states, actions, targets)
         entropy = -tf.reduce_mean(tf.reduce_sum(action_probs * log_probs, axis=1))
-        return tf.add(loss_1, loss_2), log_probs, entropy
+        return tf.add(loss_1, loss_2), tf.reduce_mean(tf.add(abs_11,abs_21)), tf.reduce_mean(tf.add(abs_12,abs_22)), log_probs, entropy
 
     def _critic_update(self, critic, states, actions, targets):
         with tf.GradientTape() as tape:
@@ -145,7 +145,7 @@ class SACAgent:
             loss = 0.5 * self._mse(targets, q)
         gradients = tape.gradient(loss, critic.trainable_variables)
         critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
-        return loss
+        return loss, tf.math.abs(targets - q), tf.math.abs(q-targets)
 
     @tf.function
     def train_step_actor(self, states) -> Tuple[float, float, float]:
@@ -185,8 +185,8 @@ class SACAgent:
     def act_batched(self, batched_state, env_batcher,  deterministic:bool, multitimer=None) -> Tuple[Tuple, np.ndarray]:
         if multitimer is not None:
             multitimer.start("batch_compute_action_dict")
-        #actions, actions_array, all_actions = self._compute_actions(state, deterministic)
         batched_actions, batched_action_probs = self._wrap_batched_compute_actions_one_hot_and_prob(batched_state, deterministic)
+        assert not tf.math.reduce_any(tf.math.is_nan(batched_action_probs)), f"{batched_action_probs}{batched_state}"
         if multitimer is not None:
             multitimer.stop("batch_compute_action_dict")
             multitimer.start("env_step")
@@ -200,6 +200,7 @@ class SACAgent:
             multitimer.start("compute_action_dict")
         #actions, actions_array, all_actions = self._compute_actions(state, deterministic)
         actions, action_probs = self._compute_actions_one_hot_and_prob(state, deterministic)
+
         if multitimer is not None:
             multitimer.stop("compute_action_dict")
             multitimer.start("env_step")
@@ -212,6 +213,8 @@ class SACAgent:
 
     def _wrap_batched_compute_actions_one_hot_and_prob(self, state, deterministic):
         actions_one_hot, actions_probs = self._batched_compute_actions_one_hot_and_prob(state, deterministic)
+        if state.shape[0]==1:
+            actions_one_hot, actions_probs = tf.expand_dims(actions_one_hot, axis=1), actions_probs
         return np.moveaxis(np.array(actions_one_hot), 0, 1), np.moveaxis(np.array(actions_probs), 0, 1)
     @tf.function
     def _batched_compute_actions_one_hot_and_prob(self, state, deterministic):

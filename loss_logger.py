@@ -67,3 +67,11 @@ class LossLogger:
 
     def all_smoothed(self)->Dict[str,List[float]]:
         return self._smoothed
+
+    def save(self, path: str)->None:
+        np.savez(f"{path}/logger_var_dict", **self._var_dict)
+        np.savez(f"{path}/logger_smoothed", **self._smoothed)
+
+    def load(self, path: str)->None:
+        self._var_dict = dict(np.load(f"{path}/logger_var_dict.npz"))
+        self._smoothed = dict(np.load(f"{path}/logger_smoothed.npz"))

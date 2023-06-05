@@ -32,5 +32,7 @@ class EnvBatcher:
     def reset_all(self):
         return np.array([env.reset() for env in self._envs])
 
+    def render(self, index: int):
+        return self._envs[index].render()
 
 
