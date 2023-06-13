@@ -4,7 +4,6 @@ import tensorflow as tf
 import numpy as np
 from typing_extensions import override
 
-from params import TIME_STEPS
 
 
 class ExperienceReplayBuffer:
@@ -84,10 +83,10 @@ class ExperienceReplayBuffer:
         self._current_position = 0
 
 class RecurrentExperienceReplayBuffer(ExperienceReplayBuffer):
-    def __init__(self, state_dims, action_dims, agent_number: float, max_size=1000000, batch_size=256):
+    def __init__(self, state_dims, time_steps: int, action_dims, agent_number: float, max_size=1000000, batch_size=256):
         super().__init__(state_dims=state_dims, action_dims=action_dims, agent_number=agent_number, max_size=max_size, batch_size=batch_size)
-        self._state_memory = np.zeros((self._max_size, TIME_STEPS,agent_number,*state_dims))
-        self._state_prime_memory = np.zeros((self._max_size, TIME_STEPS,agent_number,*state_dims))
+        self._state_memory = np.zeros((self._max_size, time_steps,agent_number,*state_dims))
+        self._state_prime_memory = np.zeros((self._max_size, time_steps,agent_number,*state_dims))
 
     @override
     def _add_state_transitions(self, state, state_):

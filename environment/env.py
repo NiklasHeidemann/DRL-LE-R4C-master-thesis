@@ -9,17 +9,19 @@ from pettingzoo.utils.env import AgentID
 from environment.generator import WorldGenerator, PositionIndex
 from environment.reward import ComputeReward
 from environment.stats import Stats
-from params import TIME_STEPS, SIZE_VOCABULARY, NUMBER_COMMUNICATION_CHANNELS, ACTIONS
+from domain import ACTIONS, ENV_TYPE
 
 RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], Dict[AgentID, np.ndarray], int]
 RenderSaveExtended = Tuple[RenderSave, np.ndarray, Dict[AgentID, Tuple[float,float]]]
 
-DEFAULT_COMMUNCIATIONS = np.concatenate([[1.]+[0.]*SIZE_VOCABULARY]*NUMBER_COMMUNICATION_CHANNELS) if NUMBER_COMMUNICATION_CHANNELS > 0 else []
+DEFAULT_COMMUNCIATIONS = lambda size_vocabulary, number_communication_channels: np.concatenate([[1.]+[0.]*size_vocabulary]*number_communication_channels) if number_communication_channels > 0 else []
 
 def _map_communication_to_str(communication: np.ndarray) -> str:
     chars = []
-    for index in range(0, len(communication), SIZE_VOCABULARY + 1):
-        token = communication[index:index + SIZE_VOCABULARY + 1]
+    size_vocabulary = len(communication)/sum(communication)
+    assert int(size_vocabulary) == size_vocabulary
+    for index in range(0, len(communication), int(size_vocabulary) + 1):
+        token = communication[index:index + size_vocabulary + 1]
         index = communication.argmax()
         assert sum(token) == 1, f"{token}, {communication}"
         if index == 0:
@@ -50,14 +52,16 @@ class CoopGridWorld(ParallelEnv):
         self._grid, self._agent_positions, self._stats, self._type = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
-        self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS for agent_id in self._stats.agent_ids})
+        self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS(self._stats.size_vocabulary, self._stats.number_communication_channels) for agent_id in self._stats.agent_ids})
         self._agents_locked = {agent_id: -1 for agent_id in self._stats.agent_ids}
         #self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
-        self._last_observations = deque([self._obs_array]*TIME_STEPS)
+        self._last_observations = deque([self._obs_array]*self._stats.recurrency)
         return self.obs
 
 
     def _obs_for_agent(self,agent_id: str)->np.ndarray:
+        if self._agent_positions[agent_id] is None:
+            return np.zeros(shape=(self._stats.observation_dimension))
         visible_positions = self.stats.visible_positions(self._agent_positions[agent_id])
         grid_observation = np.reshape(newshape=(-1,),a=np.array([self._grid[position] if self._is_valid_position(position) else (np.zeros(shape=(self._stats.values_per_field)) -1) for position in visible_positions]))
         communication_observation = np.concatenate([self._communications[-1][agent_id]]+[communication for com_agent_id, communication in self._communications[-1].items() if com_agent_id!=agent_id])
@@ -86,10 +90,14 @@ class CoopGridWorld(ParallelEnv):
         self._communications.append({})
         self._last_agent_actions.append({})
         for index, agent_id in enumerate(self._stats.agent_ids):
-            movement = actions[index,:len(ACTIONS)]
-            self._move_agent(agent_id=agent_id, movement=movement)
-            self._last_agent_actions[-1][agent_id]=movement
-            self._communications[-1][agent_id] = np.array(actions[index,len(ACTIONS):])
+            if self._agent_positions[agent_id] is None:
+                self._last_agent_actions[-1][agent_id] = actions[index,:len(ACTIONS)]
+                self._communications[-1][agent_id] = DEFAULT_COMMUNCIATIONS(self._stats.size_vocabulary, self._stats.number_communication_channels)
+            else:
+                movement = actions[index,:len(ACTIONS)]
+                self._move_agent(agent_id=agent_id, movement=movement)
+                self._last_agent_actions[-1][agent_id]=movement
+                self._communications[-1][agent_id] = np.array(actions[index,len(ACTIONS):])
         reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._agents_locked if self._xenia_lock else None)
         is_terminated = max(reward_array)>0
         is_truncated = self._stats.time_step >= self._stats.max_time_step
@@ -155,9 +163,5 @@ class CoopGridWorld(ParallelEnv):
         return env
 
     @property
-    def current_type(self)->str:
-        return self._type
-
-    @property
-    def types(self)->List[str]:
-        return self._generator.types
+    def current_type(self)->ENV_TYPE:
+        return self._stats.placed_agents

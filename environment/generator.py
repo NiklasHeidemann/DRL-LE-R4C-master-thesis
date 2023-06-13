@@ -1,18 +1,16 @@
 import random
 from abc import abstractmethod
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Optional
 
 from pettingzoo.utils.env import AgentID
 from typing_extensions import Protocol
 import numpy as np
 
 from environment.stats import Stats
-from params import NUMBER_OF_AGENTS, NUMBER_OF_OBJECTS_TO_PLACE_RANGE, MAX_OBJECT_COLOR_RANGE, \
-    GRID_SIZE_RANGE, MAX_TIME_STEP
 
 Grid = np.ndarray
 PositionIndex = Tuple[int,int]
-AgentPositions = Dict[AgentID, PositionIndex]
+AgentPositions = Dict[AgentID, Optional[PositionIndex]]
 Type = str
 
 
@@ -40,18 +38,35 @@ class MultiGenerator(WorldGenerator):
         return [elem for list_ in [generator.types for generator in self._generators] for elem in list_]
 
 class RandomWorldGenerator(WorldGenerator):
-    _grid_size_range: Tuple[int, int] = GRID_SIZE_RANGE # inclusive interval
-    _number_of_object_colors_range: Tuple[int, int] = (1,MAX_OBJECT_COLOR_RANGE) # inclusive interval
-    _number_of_objects_to_place: Tuple[int,int] = NUMBER_OF_OBJECTS_TO_PLACE_RANGE
-    _number_of_agents: int = NUMBER_OF_AGENTS
+    _grid_size_range: Tuple[int, int] # inclusive interval
+    _number_of_object_colors_range: Tuple[int, int]  # inclusive interval
+    _number_of_objects_to_place: Tuple[int,int]
+    _number_of_agents: int
+    _agent_dropout_probs: float
+    _max_time_step: int
 
-    def __init__(self, seed: int):
+    def __init__(self,
+    grid_size_range: Tuple[int, int], # inclusive interval
+    number_of_object_colors_range: Tuple[int, int],  # inclusive interval
+    number_of_objects_to_place: Tuple[int,int],
+    number_of_agents: int,
+    agent_dropout_probs: float,
+    max_time_step: int,
+                 seed: int
+                 ) -> None:
+        super().__init__()
+        self._max_time_step = max_time_step
+        self._number_of_agents = number_of_agents
+        self._agent_dropout_probs = agent_dropout_probs
+        self._number_of_object_colors_range = number_of_object_colors_range
+        self._grid_size_range = grid_size_range
+        self._number_of_objects_to_place = number_of_objects_to_place
         random.seed(seed)
     def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats, Type]:
         stats = last_stats.new_stats_from_old_stats()
         stats.values_per_field = self._number_of_object_colors_range[1]
         stats.time_step = 0
-        stats.max_time_step = MAX_TIME_STEP
+        stats.max_time_step = self._max_time_step
         stats.grid_size = random.randint(self._grid_size_range[0], self._grid_size_range[1])
         grid = np.zeros(shape=(stats.grid_size, stats.grid_size, stats.values_per_field))
         grid_with_objects = self._place_objects(grid=grid, stats=stats)
@@ -62,6 +77,11 @@ class RandomWorldGenerator(WorldGenerator):
         agent_positions = {}
         for agent_id in stats.agent_ids:
             agent_positions[agent_id] = (random.randint(0, stats.grid_size-1), random.randint(0, stats.grid_size-1))
+        if random.random() > self._agent_dropout_probs:
+            stats.placed_agents = stats.number_of_agents
+        else:
+            stats.placed_agents = stats.number_of_agents - 1
+            agent_positions[stats.agent_ids[random.randrange(len(agent_positions))]] = None
         return agent_positions
     def _place_objects(self, grid: np.ndarray, stats: Stats)->np.ndarray:
         stats.number_of_objects = random.randint(int(self._number_of_objects_to_place[0]*stats.grid_size*stats.grid_size), int(self._number_of_objects_to_place[1]*stats.grid_size*stats.grid_size))
@@ -83,12 +103,13 @@ class RandomWorldGenerator(WorldGenerator):
 
 class ChoiceWorldGenerator(WorldGenerator):
     _grid_size: int = 10
-    _number_of_object_colors: int= MAX_OBJECT_COLOR_RANGE
     _number_of_objects_to_place_per_agent: int = 4
     _number_of_agents: int = 2
+    _number_of_object_colors: int
 
-    def __init__(self, seed: int):
+    def __init__(self, seed: int, object_color_range: Tuple[int,int]):
         random.seed(seed)
+        self._number_of_object_colors = object_color_range[1]
     def __call__(self, last_stats: Stats)->Tuple[Grid, AgentPositions, Stats, Type]:
         stats = last_stats.new_stats_from_old_stats()
         stats.values_per_field = self._number_of_object_colors

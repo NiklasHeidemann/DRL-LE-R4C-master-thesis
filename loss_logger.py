@@ -11,6 +11,7 @@ Q_VALUES = "q_values"
 MAX_Q_VALUES = "max_q_values"
 ALPHA_VALUES = "alpha"
 ENTROPY = "entropy"
+N_AGENT_RETURNS = lambda n : f"{n}_agent_returns"
 
 class LossLogger:
 
@@ -71,7 +72,9 @@ class LossLogger:
     def save(self, path: str)->None:
         np.savez(f"{path}/logger_var_dict", **self._var_dict)
         np.savez(f"{path}/logger_smoothed", **self._smoothed)
+        np.savez(f"{path}/logger_is_smoothed", **self._is_smoothed)
 
     def load(self, path: str)->None:
-        self._var_dict = dict(np.load(f"{path}/logger_var_dict.npz"))
-        self._smoothed = dict(np.load(f"{path}/logger_smoothed.npz"))
+        self._var_dict = {key: list(value) for key, value in dict(np.load(f"{path}/logger_var_dict.npz")).items()}
+        self._smoothed = {key: list(value) for key, value in dict(np.load(f"{path}/logger_smoothed.npz")).items()}
+        self._is_smoothed = {key: value for key, value in dict(np.load(f"{path}/logger_is_smoothed.npz")).items()}

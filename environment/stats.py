@@ -2,12 +2,13 @@ from typing import Callable, Tuple, List
 
 import numpy as np
 
-from params import ACTIONS
+from domain import ACTIONS
 
 
 class Stats:
     grid_size: int = None
     number_of_agents: int = None
+    placed_agents: int = None
     number_of_objects: int = None
     number_of_used_colors: int = None
     time_step: int = None
@@ -15,6 +16,7 @@ class Stats:
     values_per_field: int = None
     number_communication_channels: int = None
     size_vocabulary: int = None
+    recurrency: int = None
     visible_positions: Callable[[Tuple[int,int]],List[Tuple[int,int]]]
 
     @property
@@ -48,6 +50,7 @@ class Stats:
         new_stats.number_communication_channels = self.number_communication_channels
         new_stats.size_vocabulary = self.size_vocabulary
         new_stats.visible_positions = self.visible_positions
+        new_stats.recurrency = self.recurrency
         return new_stats
 
 

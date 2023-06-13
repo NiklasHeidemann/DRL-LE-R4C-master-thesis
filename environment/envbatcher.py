@@ -4,7 +4,6 @@ from pettingzoo import ParallelEnv
 
 from environment.env import CoopGridWorld
 from environment.stats import Stats
-from params import TIME_STEPS
 
 
 class EnvBatcher:
@@ -21,7 +20,7 @@ class EnvBatcher:
         return new_observation_array
 
     def step(self, actions_batch: np.ndarray):
-        obs = np.zeros(shape=(len(self._envs), TIME_STEPS, len(self._stats.agent_ids), self._stats.observation_dimension))
+        obs = np.zeros(shape=(len(self._envs), self._stats.recurrency, len(self._stats.agent_ids), self._stats.observation_dimension))
         reward = np.zeros(shape=(len(self._envs), len(self._stats.agent_ids)))
         terminated = np.zeros(shape=(len(self._envs)))
         truncated = np.zeros(shape=(len(self._envs)))
@@ -35,4 +34,10 @@ class EnvBatcher:
     def render(self, index: int):
         return self._envs[index].render()
 
+    @property
+    def env_types(self)->np.ndarray:
+        return np.array([env.current_type for env in self._envs])
 
+    @property
+    def size(self)->int:
+        return len(self._envs)

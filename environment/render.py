@@ -8,7 +8,8 @@ import numpy as np
 
 from environment.env import RenderSave, RenderSaveExtended, _map_communication_to_str
 from environment.generator import PositionIndex
-from params import ACTIONS, RENDER
+from params import RENDER
+from domain import ACTIONS
 
 if RENDER:
     window = pygame.display.set_mode((1000, 500))
@@ -29,9 +30,11 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
             pygame.draw.rect(surface=window, color=color, rect=(50*col, 50*row, 49, 49))
 
     my_font = pygame.font.SysFont('Comic Sans MS', 30)
-    for id, (row,col) in agent_positions.items():
-        text_field =my_font.render(id,True,background_color)
-        window.blit(text_field, (col*50+10, row*50+10))
+    for id, position in agent_positions.items():
+        if position is not None:
+            row, col = position
+            text_field =my_font.render(id,True,background_color)
+            window.blit(text_field, (col*50+10, row*50+10))
 
     pygame.draw.rect(surface=window,color=textfield_color, rect=(500, 0, 500,500))
     text_field = my_font.render(f"timestep:     {timestep}", True, background_color)

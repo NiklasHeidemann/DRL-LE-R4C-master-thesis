@@ -7,7 +7,6 @@ from tensorflow import math as tfm
 
 from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
 from loss_logger import LossLogger, ALPHA_VALUES
-from params import ACTIONS, TIME_STEPS, SIZE_VOCABULARY, ENV_PARALLEL
 
 
 class SACAgent:
@@ -38,7 +37,7 @@ class SACAgent:
     def __init__(self, environment, loss_logger: LossLogger, replay_buffer: ExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
                  actor_network_generator, critic_network_generator, recurrent: bool,
                  learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float,
-                 batch_size: int , model_path: str, target_entropy: float):
+                 batch_size: int , model_path: str, target_entropy: float, seed: int):
         self._environment = environment
         self._loss_logger = loss_logger
         self._self_play = self_play
@@ -68,10 +67,12 @@ class SACAgent:
         self._critic_2_t = critic_network_generator(learning_rate=learning_rate, agent_num=len(agent_ids),
                                                     recurrent=recurrent)
         self._wight_init()
+        generator = tf.random.Generator.from_seed(seed=seed)
+        self._generators = generator.split(count=len(agent_ids))
 
     def _get_max_q_value(self, states):
         reshaped_states = tf.reshape(np.array(states), shape=(
-            1, TIME_STEPS, self._environment.stats.observation_dimension * len(self._agent_ids)))
+            1, self._environment.stats.recurrency, self._environment.stats.observation_dimension * len(self._agent_ids)))
         q = (tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)))
         q_by_agent = tf.reshape(q, shape=(len(self._agent_ids), self._environment.stats.action_dimension))
         max_q_values = np.max(q_by_agent, axis=1)
@@ -79,27 +80,27 @@ class SACAgent:
         return {agent_id: (max_q_value, max_q_action) for agent_id, max_q_value, max_q_action in
                 zip(self._agent_ids, max_q_values, max_q_actions)}
 
-    def save_models(self, name):
+    def save_models(self, name, run_name):
         if self._self_play:
-            self._actor.save_weights(f"{self._model_path}actor{name}")
+            self._actor.save_weights(f"{self._model_path}{run_name}_actor{name}")
         else:
             for id, actor in self._actors.items():
-                actor.save_weights(f"{self._model_path}actor_{id}_{name}")
-        self._critic_1.save_weights(f"{self._model_path}critic_1{name}")
-        self._critic_2.save_weights(f"{self._model_path}critic_2{name}")
-        self._critic_1_t.save_weights(f"{self._model_path}critic_1_t{name}")
-        self._critic_2_t.save_weights(f"{self._model_path}critic_2_t{name}")
+                actor.save_weights(f"{self._model_path}{run_name}_actor_{id}_{name}")
+        self._critic_1.save_weights(f"{self._model_path}{run_name}_critic_1{name}")
+        self._critic_2.save_weights(f"{self._model_path}{run_name}_critic_2{name}")
+        self._critic_1_t.save_weights(f"{self._model_path}{run_name}_critic_1_t{name}")
+        self._critic_2_t.save_weights(f"{self._model_path}{run_name}_critic_2_t{name}")
 
-    def load_models(self, name):
+    def load_models(self, name, run_name):
         if self._self_play:
-            self._actor.load_weights(f"{self._model_path}actor{name}")
+            self._actor.load_weights(f"{self._model_path}{run_name}_actor{name}")
         else:
             for id, actor in self._actors.items():
-                actor.load_weights(f"{self._model_path}actor_{id}_{name}")
-        self._critic_1.load_weights(f"{self._model_path}critic_1{name}")
-        self._critic_2.load_weights(f"{self._model_path}critic_2{name}")
-        self._critic_1_t.load_weights(f"{self._model_path}critic_1_t{name}")
-        self._critic_2_t.load_weights(f"{self._model_path}critic_2_t{name}")
+                actor.load_weights(f"{self._model_path}{run_name}_actor_{id}_{name}")
+        self._critic_1.load_weights(f"{self._model_path}{run_name}_critic_1{name}")
+        self._critic_2.load_weights(f"{self._model_path}{run_name}_critic_2{name}")
+        self._critic_1_t.load_weights(f"{self._model_path}{run_name}_critic_1_t{name}")
+        self._critic_2_t.load_weights(f"{self._model_path}{run_name}_critic_2_t{name}")
 
     def _wight_init(self):
         self._critic_1.set_weights(self._critic_1_t.weights)
@@ -122,7 +123,7 @@ class SACAgent:
                                                                                                     shape=(
                                                                                                     self._batch_size * len(
                                                                                                         self._agent_ids),
-                                                                                                    TIME_STEPS,
+                                                                                                    self._environment.stats.recurrency,
                                                                                                     self._environment.stats.observation_dimension)),
                                                                                          actor=self._actor)
         flattened_states_prime = tf.reshape(states_prime, shape=self.agent_flattened_shape)
@@ -132,7 +133,7 @@ class SACAgent:
         q_r = tfm.minimum(q1, q2) - self._alpha * log_probs
         q_r_mean = tf.math.reduce_sum(action_probs * q_r, axis=1)
         targets = self._reward_scale * tf.reshape(rewards, q_r_mean.shape) + self._gamma * (
-                1 - tf.concat([dones,dones], axis=0)) * q_r_mean
+                1 - tf.repeat(dones,axis=0,repeats=len(self._agent_ids))) * q_r_mean
         loss_1, abs_11, abs_12 = self._critic_update(self._critic_1, flattened_states, actions, targets)
         loss_2, abs_21, abs_22 = self._critic_update(self._critic_2, flattened_states, actions, targets)
         entropy = -tf.reduce_mean(tf.reduce_sum(action_probs * log_probs, axis=1))
@@ -155,7 +156,7 @@ class SACAgent:
             with tf.GradientTape() as tape:
                 _, action_probs, log_probs = self.sample_actions(
                     states=tf.reshape(states, shape=(
-                    self._batch_size * len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)),
+                    self._batch_size * len(self._agent_ids), self._environment.stats.recurrency, self._environment.stats.observation_dimension)),
                     actor=actor)
                 q = tf.reshape(tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)),
                                shape=action_probs.shape)
@@ -170,14 +171,15 @@ class SACAgent:
 
 
     @tf.function
-    def sample_actions(self, states, actor, deterministic=False):
+    def sample_actions(self, states, actor, generator_index:int = 0, deterministic=False):
         probability_groups = actor(states) # first one for actions, rest for communication channels
         probability_groups = probability_groups if type(probability_groups) == list else [probability_groups]
         log_prob_groups = [tf.math.log(probabilities) for probabilities in probability_groups]
         if deterministic:
             action_groups = [tf.argmax(probabilities, axis=1) for probabilities in probability_groups]
         else:
-            action_groups = [tf.random.categorical(logits=log_probs, num_samples=1)[:,0] for log_probs in log_prob_groups]
+            #action_groups = [self._generators[generator_index].categorical(logits=log_probs, num_samples=1)[:,0] for log_probs in log_prob_groups]
+            action_groups = [tf.random.stateless_categorical(logits=log_probs, num_samples=1, seed=self._generators[generator_index].make_seeds(2)[0])[:,0] for log_probs in log_prob_groups]
         one_hot_action_groups = [tf.one_hot(actions, depth=probabilities.shape[-1]) for actions, probabilities in zip(action_groups,probability_groups)]
         return tf.squeeze(tf.concat(one_hot_action_groups,axis=-1)), tf.concat(probability_groups,axis=-1), tf.concat(log_prob_groups,axis=-1)
 
@@ -218,34 +220,22 @@ class SACAgent:
         return np.moveaxis(np.array(actions_one_hot), 0, 1), np.moveaxis(np.array(actions_probs), 0, 1)
     @tf.function
     def _batched_compute_actions_one_hot_and_prob(self, state, deterministic):
-        actions_one_hot, actions_probs, _ = list(zip(*[self.sample_actions(deterministic=deterministic,
+        actions_one_hot, actions_probs, _ = list(zip(*[self.sample_actions(deterministic=deterministic,generator_index=index,
                                                                            states= tf.convert_to_tensor(state[:,:,index,:]),
                                                                            actor=self._actor) for index in range(len(self._agent_ids))]))
         return actions_one_hot, actions_probs
 
     def _compute_actions_one_hot_and_prob(self, state, deterministic):
-        assert state.shape == (TIME_STEPS, len(self._agent_ids), self._environment.stats.observation_dimension)
-        actions_one_hot, actions_probs, _ = list(zip(*[self.sample_actions(deterministic=deterministic,
+        assert state.shape == (self._environment.stats.recurrency, len(self._agent_ids), self._environment.stats.observation_dimension)
+        actions_one_hot, actions_probs, _ = list(zip(*[self.sample_actions(deterministic=deterministic,generator_index=index,
                                                                            states=tf.expand_dims(
                                                                                tf.convert_to_tensor(state[:,index,:]), axis=0),
                                                                            actor=self._actor) for index in range(len(self._agent_ids))]))
         return np.array(actions_one_hot), np.squeeze(np.array(actions_probs))
 
-        actions = {
-            agent_id: self.sample_actions(deterministic=deterministic,
-                states=tf.expand_dims(tf.convert_to_tensor(states), axis=0), actor=self._actor) for agent_id, states in
-            state.items()
-        }
-        all_actions = {agent_id: actions[agent_id][0] for agent_id in self._agent_ids}
-        communications = {agent_id: tf.squeeze(action[len(ACTIONS):]) for agent_id, action in all_actions.items()}
-        selected_actions = {agent_id: ACTIONS[tf.argmax(action[:len(ACTIONS)])] for agent_id, action in
-                            all_actions.items()}
-        actions_array = {agent_id: (selected_actions[agent_id], communications[agent_id]) for agent_id in
-                        all_actions.keys()}
-        return actions, actions_array, all_actions
 
     def train_step_temperature(self, states):
-        action_probs = self._actor(tf.reshape(states, shape=(self._batch_size * len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)))
+        action_probs = self._actor(tf.reshape(states, shape=(self._batch_size * len(self._agent_ids), self._environment.stats.recurrency, self._environment.stats.observation_dimension)))
         only_action_probs = action_probs[0] if type(action_probs) == list else action_probs # leave out communication
         log_probs = tf.math.log(only_action_probs)
         gradient = tf.reduce_mean(
@@ -259,7 +249,7 @@ class SACAgent:
 
     @property
     def agent_flattened_shape(self):
-        return (self._batch_size, TIME_STEPS, self._environment.stats.observation_dimension * len(self._agent_ids))
+        return (self._batch_size, self._environment.stats.recurrency, self._environment.stats.observation_dimension * len(self._agent_ids))
 
     def _get_actor(self, agent_id: str) -> tf.keras.Model:
         return self._actor if self._self_play else self._actors[agent_id]

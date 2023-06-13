@@ -32,7 +32,7 @@ class TrainPredictGoal:
                             break
                         all_communications = environment._communications
                         number_dummy_communications = max(0, 5-len(all_communications))
-                        trimmed_communications = [{agent_id: DEFAULT_COMMUNCIATIONS for agent_id in agent._agent_ids}]*number_dummy_communications + all_communications[-(min(5,len(all_communications))):]
+                        trimmed_communications = [{agent_id: DEFAULT_COMMUNCIATIONS(environment.stats.size_vocabulary, environment.stats.number_communication_channels) for agent_id in agent._agent_ids}]*number_dummy_communications + all_communications[-(min(5,len(all_communications))):]
                         communications.append(np.concatenate([np.concatenate(list(dict_.values())) for dict_ in trimmed_communications]))
                         colors = {np.where(environment._grid[position] != 0)[0][0] for agent_id, position in environment._agent_positions.items()}
                         assert len(colors)==1

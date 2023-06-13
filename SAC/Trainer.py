@@ -12,9 +12,8 @@ from environment.env import RenderSaveExtended
 from environment.envbatcher import EnvBatcher
 from environment.render import render_permanently
 from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, MAX_Q_VALUES, ALPHA_VALUES, \
-    ENTROPY
-from params import BATCH_SIZE, LEARNING_RATE, TIME_STEPS, TRAININGS_PER_TRAINING, ALPHA, ACTIONS, GAMMA, TARGET_ENTROPY, \
-    ENV_PARALLEL
+    ENTROPY, N_AGENT_RETURNS
+from domain import ACTIONS
 from plots import plot_multiple
 from timer import Timer, MultiTimer
 
@@ -46,13 +45,13 @@ class Trainer:
     # todo cnn
     def __init__(self, environment, self_play: bool, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, max_replay_buffer_size: int, recurrent: bool,
-                 learning_rate=LEARNING_RATE, gamma=GAMMA, tau=0.005, reward_scale=1, alpha=ALPHA,
-                 batch_size: int = BATCH_SIZE, model_path="model/", target_entropy=TARGET_ENTROPY):
+                 learning_rate, gamma, alpha,env_parallel: int,seed:int,run_name:str,
+                 batch_size: int, target_entropy,model_path="model/", tau=0.005, reward_scale=1):
         self._loss_logger = LossLogger()
-        self._env_batcher = EnvBatcher(env=environment, batch_size=ENV_PARALLEL)
-        self._replay_buffer = RecurrentExperienceReplayBuffer(state_dim, action_dim, agent_number=len(agent_ids),
-                                                              max_size=max_replay_buffer_size, batch_size=batch_size)
-        self._agent = SACAgent(environment=environment, loss_logger=self._loss_logger,
+        self._env_batcher = EnvBatcher(env=environment, batch_size=env_parallel)
+        self._replay_buffer = RecurrentExperienceReplayBuffer(state_dims=state_dim,action_dims= action_dim, agent_number=len(agent_ids),
+                                                              max_size=max_replay_buffer_size, batch_size=batch_size, time_steps=environment.stats.recurrency)
+        self._agent = SACAgent(environment=environment, loss_logger=self._loss_logger,seed=seed,
                                replay_buffer=self._replay_buffer, self_play=self_play, agent_ids=agent_ids,
                                action_dim=action_dim, actor_network_generator=actor_network_generator,
                                critic_network_generator=critic_network_generator, recurrent=recurrent,
@@ -61,17 +60,14 @@ class Trainer:
         self._environment = environment
         self._batch_size = batch_size
         self._agent_ids = agent_ids
+        self._run_name = run_name
         if from_save:
-            self._agent.load_models(name="")
+            self._agent.load_models(name="", run_name=run_name)
             self._loss_logger.load(path="logger")
-
-    def _prepare_logging(self):
-        self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
-        self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
-        self._loss_logger.add_lists([RETURNS]+self._environment.types, smoothed=1000)
-        self._last_render_as_list = []
-        thread = Thread(target=render_permanently, args=[self._last_render_as_list])
-        thread.start()
+        else:
+            self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
+            self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
+            self._loss_logger.add_lists([RETURNS, N_AGENT_RETURNS(2), N_AGENT_RETURNS(3)], smoothed=1000)
 
     def _env_step(self, observation_array, multitimer: Optional[MultiTimer], return_array: np.ndarray):
         (actions_array, new_observation_array, reward_array, done), action_probs = self._agent.act_batched(
@@ -99,24 +95,24 @@ class Trainer:
                     if len(self._last_render_as_list) > 1:
                         self._last_render_as_list.pop(0)
             self._loss_logger.add_value_list(identifier=RETURNS, values=return_array[done_mask])
+            self._loss_logger.add_value_list(values=return_array[tf.math.logical_and(done_mask,(self._env_batcher.env_types == 2))], identifier=N_AGENT_RETURNS(2))
+            self._loss_logger.add_value_list(values =return_array[tf.math.logical_and(done_mask,(self._env_batcher.env_types == 3))], identifier=N_AGENT_RETURNS(3))
             #self._loss_logger.add_value(identifier=self._environment.current_type, value=ret)
             return_array[done_mask] = 0
             observation_array = self._env_batcher.reset(observation_array=observation_array, mask=done_mask)
-            epoch_array[done_mask] += ENV_PARALLEL
+            epoch_array[done_mask] += self._env_batcher.size
             if render and done_mask[0]:
                 self._extend_render_save(render_save=render_save, action_probs=np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension)), observation_array=observation_array[0])
-            if epoch_array[0] % (ENV_PARALLEL*100) == 0 and done_mask[0]:
+            if epoch_array[0] % (self._env_batcher.size*100) == 0 and done_mask[0]:
                 self.test(n_samples=20, verbose_samples=0)
-                self._agent.save_models(name="")
+                self._agent.save_models(name="", run_name=self._run_name)
                 self._loss_logger.save(path="logger")
-                thread = Thread(target=plot_multiple, args=[self._loss_logger.all_smoothed()])
+                thread = Thread(target=plot_multiple, args=[self._run_name, self._loss_logger.all_smoothed()])
                 thread.start()
             return observation_array, epoch_array, return_array
 
-    def train(self, epochs, environment_steps_before_training, pre_sampling_steps, render: bool, training_steps_per_update=1):
-        # todo gym wrappen for multiprocessing alternativ ray alternativ (wenn cheap: einfach hundert environments sequentiell)
+    def train(self, epochs, environment_steps_before_training, pre_sampling_steps, render: bool, training_steps_per_update, run_desc: str=""):
         # loggen aber richtig
-        # reshapen in learn notwendig?
         # timetracing
 
         """
@@ -130,17 +126,20 @@ class Trainer:
         :param pre_sampling_steps=1024: Number of exploration steps sampled to the replay buffer before training starts
         """
         self._pre_sample(pre_sampling_steps=pre_sampling_steps)
-        self._prepare_logging()
+        if render:
+            self._last_render_as_list = []
+            thread = Thread(target=render_permanently, args=[self._last_render_as_list])
+            thread.start()
         print("start training!")
 
         observation_array = self._env_batcher.reset_all()
         # default values for first iteration:
-        done = np.array([False]*ENV_PARALLEL)
+        done = np.array([False]*self._env_batcher.size)
         action_probs_0: Dict[str, np.ndarray] = np.zeros(shape=(len(self._agent_ids),self._environment.stats.action_dimension))
-        return_array = np.zeros(shape=(ENV_PARALLEL))
+        return_array = np.zeros(shape=(self._env_batcher.size))
 
         render_save = []
-        epoch_array = np.array(list(range(ENV_PARALLEL)))
+        epoch_array = np.array(list(range(self._env_batcher.size)))
         steps_total = 0
         while True:
             steps = 0
@@ -154,8 +153,8 @@ class Trainer:
                     observation_array, ret, done, action_probs_0 = self._env_step(
                         observation_array=observation_array, multitimer=None, return_array=return_array
                     )
-                    steps += ENV_PARALLEL
-                    steps_total += ENV_PARALLEL
+                    steps += self._env_batcher.size
+                    steps_total += self._env_batcher.size
 
 
 
@@ -164,7 +163,6 @@ class Trainer:
 
 
     def learn(self) -> None:
-        for _ in range(TRAININGS_PER_TRAINING):
             states, actions, rewards, states_prime, dones = self._replay_buffer.sample_batch()
             actor_loss, q_values, max_q_values = self._agent.train_step_actor(states)
             critic_loss, abs_1, abs_2, log_probs, entropy = self._agent.train_step_critic(
@@ -175,13 +173,12 @@ class Trainer:
                 states_prime=tf.reshape(tensor=states_prime, shape=self.extended_shape),
                 dones=tf.reshape(tensor=dones, shape=(self._batch_size)),
             )
-            print(critic_loss, abs_1, abs_2)
             #self._agent.train_step_temperature(states)
             self._agent.update_target_weights()
             self._loss_logger.add_aggregatable_values(
                 {CRITIC_LOSS: critic_loss, LOG_PROBS: log_probs, ACTOR_LOSS: actor_loss, Q_VALUES: q_values,
                  MAX_Q_VALUES: max_q_values, ENTROPY: entropy})
-        self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES, MAX_Q_VALUES, ENTROPY])
+            self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES, MAX_Q_VALUES, ENTROPY])
 
     # todo sachen auf notion packen
 
@@ -229,4 +226,4 @@ class Trainer:
 
     @property
     def extended_shape(self):
-        return (self._batch_size, len(self._agent_ids), TIME_STEPS, self._environment.stats.observation_dimension)
+        return (self._batch_size, len(self._agent_ids), self._environment.stats.recurrency, self._environment.stats.observation_dimension)

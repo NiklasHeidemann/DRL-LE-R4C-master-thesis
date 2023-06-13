@@ -1,18 +1,4 @@
-
-
-def visible_positions_13(x_y):
-    return [
-            (x_y[0]+1,x_y[1]+1),(x_y[0]+1,x_y[1]),(x_y[0]+1,x_y[1]-1),
-            (x_y[0],x_y[1]+1),(x_y[0],x_y[1]),(x_y[0],x_y[1]-1),
-            (x_y[0]-1,x_y[1]+1),(x_y[0]-1,x_y[1]),(x_y[0]-1,x_y[1]-1),
-            (x_y[0]+2,x_y[1]),(x_y[0]-2,x_y[1]),(x_y[0],x_y[1]+2),(x_y[0],x_y[1]-2)
-        ]
-
-visible_positions_5 =         lambda x_y: [
-            (x_y[0]+1,x_y[1]),
-            (x_y[0],x_y[1]+1),(x_y[0],x_y[1]),(x_y[0],x_y[1]-1),
-            (x_y[0]-1,x_y[1]),
-        ]
+from domain import visible_positions_13
 
 # network
 BATCH_SIZE =128
@@ -23,7 +9,7 @@ NUMBER_OF_BIG_LAYERS = 2
 RECURRENT = True
 SELF_PLAY = True
 TIME_STEPS = 10
-ALPHA = 0.1
+ALPHA = 0.06
 GAMMA = 0.99
 TARGET_ENTROPY = 1.
 
@@ -31,30 +17,31 @@ TARGET_ENTROPY = 1.
 WORLD_GENERATOR = "random" # multi or random or choice
 GRID_SIZE_RANGE = (4,8)
 MAX_TIME_STEP = 30
-NUMBER_OF_AGENTS = 2
-NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.08,0.2)
-MAX_OBJECT_COLOR_RANGE = 4
+NUMBER_OF_AGENTS = 3
+COMMUNISM = True
+AGENT_DROPOUT_PROBS = 0.5 if NUMBER_OF_AGENTS == 3 else 0 # meaning with 0.5 probabilty the third agent is not placed
+NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.08,0.15)
+OBJECT_COLOR_RANGE = (1,5)
 POS_REWARD = 2
-NEG_REWARD = -0.0
+NEG_REWARD = -0.1
 XENIA_LOCK = True
-XENIA_PERMANENCE = True
+XENIA_PERMANENCE = False
 
 #input
 NUMBER_COMMUNICATION_CHANNELS = 1
-SIZE_VOCABULARY = MAX_OBJECT_COLOR_RANGE
+SIZE_VOCABULARY = OBJECT_COLOR_RANGE[1]
 VISIBLE_POSITIONS = visible_positions_13
 
 #buffer
 MAX_REPLAY_BUFFER_SIZE = 10000
-PRE_SAMPLING_STEPS = 100
+PRE_SAMPLING_STEPS = 1000
 
 #training
 ENVIRONMENT_STEPS_PER_TRAINING = 500
 TRAININGS_PER_TRAINING = 8
 EPOCHS = 300000
-SEED=10
+SEED=12
 ENV_PARALLEL = 32
 FROM_SAVE = True
 RENDER = False
 
-ACTIONS = ["HOLD", "LEFT", "RIGHT", "UP", "DOWN"]
