@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Dict, Optional
 
-from pettingzoo.utils.conversions import AgentID
+from domain import AgentID
 from typing_extensions import Protocol
 import numpy as np
 

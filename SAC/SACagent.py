@@ -6,6 +6,7 @@ import tensorflow as tf
 from tensorflow import math as tfm
 
 from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
+from domain import ACTIONS
 from loss_logger import LossLogger, ALPHA_VALUES
 
 
@@ -117,7 +118,7 @@ class SACAgent:
         target_network.set_weights(new_wights)
 
 
-    @tf.function
+    #@tf.function
     def train_step_critic(self, states, actions, rewards, states_prime, dones):
         _, action_probs, log_probs = self.sample_actions(tf.reshape(states_prime,
                                                                                                     shape=(
@@ -238,13 +239,8 @@ class SACAgent:
         action_probs = self._actor(tf.reshape(states, shape=(self._batch_size * len(self._agent_ids), self._environment.stats.recurrency, self._environment.stats.observation_dimension)))
         only_action_probs = action_probs[0] if type(action_probs) == list else action_probs # leave out communication
         log_probs = tf.math.log(only_action_probs)
-        gradient = tf.reduce_mean(
-            tf.matmul(
-                tf.reshape(only_action_probs, shape=(256, 1, 5)),
-                tf.reshape(self._alpha * log_probs, shape=(256, 5, 1))
-            ) + self._target_entropy
-        )
-        #self._alpha -= self._learning_rate * gradient
+        gradient = tf.reduce_mean(tf.reduce_sum(tf.multiply(only_action_probs, log_probs),axis=1))+self._target_entropy
+        self._alpha += 0.1*self._learning_rate * gradient
         self._loss_logger.add_value(ALPHA_VALUES, self._alpha)
 
     @property

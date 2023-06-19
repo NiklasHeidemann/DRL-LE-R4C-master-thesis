@@ -17,9 +17,10 @@ def make_config(name: str, special_vars: Dict[str, Any]):
     return RunConfig(params=params)
 
 runconfigs = [
-    make_config("with_race", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3}),
-    make_config("coop_race", {"COMMUNISM":True, "NUMBER_OF_AGENTS":3}),
-    make_config("no_race", {"COMMUNISM":False, "NUMBER_OF_AGENTS":2}),
+    make_config("three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0.}),
+    make_config("three_race_no_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 0,"AGENT_DROPOUT_PROBS":0.}),
+    make_config("three_coop_com", {"COMMUNISM":True, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0.}),
+    make_config("three_coop_no_com", {"COMMUNISM":True, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 0,"AGENT_DROPOUT_PROBS":0.}),
 ]
 for config in runconfigs:
     config()

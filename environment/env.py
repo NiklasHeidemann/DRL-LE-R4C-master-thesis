@@ -3,8 +3,7 @@ from collections import deque
 from typing import List, Tuple, Dict, Optional
 import tensorflow as tf
 import numpy as np
-from pettingzoo import ParallelEnv
-from pettingzoo.utils.env import AgentID
+from domain import AgentID
 
 from environment.generator import WorldGenerator, PositionIndex
 from environment.reward import ComputeReward
@@ -31,7 +30,7 @@ def _map_communication_to_str(communication: np.ndarray) -> str:
     return ''.join(chars)
 
 
-class CoopGridWorld(ParallelEnv):
+class CoopGridWorld:
     _grid: np.ndarray = None
     _stats: Stats = Stats()
     _agent_positions: Dict[AgentID, PositionIndex] = None

@@ -2,7 +2,7 @@ import random
 from abc import abstractmethod
 from typing import Tuple, Dict, List, Optional
 
-from pettingzoo.utils.env import AgentID
+from domain import AgentID
 from typing_extensions import Protocol
 import numpy as np
 

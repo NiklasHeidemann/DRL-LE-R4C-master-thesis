@@ -1,6 +1,5 @@
 from typing import List
 import numpy as np
-from pettingzoo import ParallelEnv
 
 from environment.env import CoopGridWorld
 from environment.stats import Stats

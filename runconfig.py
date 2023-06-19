@@ -46,7 +46,7 @@ class RunConfig:
 
     # buffer
     MAX_REPLAY_BUFFER_SIZE = 10000
-    PRE_SAMPLING_STEPS = 1000
+    PRE_SAMPLING_STEPS = 10000
 
     # training
     ENVIRONMENT_STEPS_PER_TRAINING = 500
