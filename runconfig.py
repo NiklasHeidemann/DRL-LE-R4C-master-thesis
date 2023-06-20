@@ -51,7 +51,7 @@ class RunConfig:
     # training
     ENVIRONMENT_STEPS_PER_TRAINING = 500
     TRAININGS_PER_TRAINING = 8
-    EPOCHS = 200000
+    EPOCHS = 100000
     SEED = 13
     ENV_PARALLEL = 32
     FROM_SAVE = False

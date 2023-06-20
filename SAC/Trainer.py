@@ -125,6 +125,7 @@ class Trainer:
         :param max_environment_steps_per_epoch=None: Maximal number of staps taken in the environment in an epoch
         :param pre_sampling_steps=1024: Number of exploration steps sampled to the replay buffer before training starts
         """
+        print("noc",self._environment.stats.number_communication_channels)
         self._pre_sample(pre_sampling_steps=pre_sampling_steps)
         if render:
             self._last_render_as_list = []
