@@ -118,7 +118,7 @@ class SACAgent:
         target_network.set_weights(new_wights)
 
 
-    #@tf.function
+    @tf.function
     def train_step_critic(self, states, actions, rewards, states_prime, dones):
         _, action_probs, log_probs = self.sample_actions(tf.reshape(states_prime,
                                                                                                     shape=(
@@ -149,7 +149,7 @@ class SACAgent:
         critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
         return loss, tf.math.abs(targets - q), tf.math.abs(q-targets)
 
-    @tf.function
+    #@tf.function
     def train_step_actor(self, states) -> Tuple[float, float, float]:
         reshaped_states = tf.reshape(states, shape=self.agent_flattened_shape)
         if self._self_play:
@@ -161,7 +161,7 @@ class SACAgent:
                     actor=actor)
                 q = tf.reshape(tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)),
                                shape=action_probs.shape)
-                entropy_part = self._alpha * log_probs
+                entropy_part = self._alpha * log_probs[:,:len(ACTIONS)]
                 sum_part = tfm.reduce_sum(action_probs * (entropy_part - q), axis=1)
                 loss = tfm.reduce_mean(sum_part)
             gradients = tape.gradient(loss, actor.trainable_variables)
