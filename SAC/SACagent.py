@@ -37,7 +37,7 @@ class SACAgent:
 
     def __init__(self, environment, loss_logger: LossLogger, replay_buffer: ExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
                  actor_network_generator, critic_network_generator, recurrent: bool,
-                 learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float,
+                 learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float, l_alpha: float,
                  batch_size: int , model_path: str, target_entropy: float, seed: int):
         self._environment = environment
         self._loss_logger = loss_logger
@@ -47,6 +47,7 @@ class SACAgent:
         self._tau = tau
         self._reward_scale = reward_scale
         self._alpha = alpha
+        self._l_alpha = l_alpha
         self._batch_size = batch_size
         self._learning_rate = learning_rate
         self._target_entropy = target_entropy
@@ -131,14 +132,17 @@ class SACAgent:
         flattened_states = tf.reshape(states, shape=self.agent_flattened_shape)
         q1 = tf.reshape(self._critic_1_t(flattened_states_prime), shape=action_probs.shape)
         q2 = tf.reshape(self._critic_2_t(flattened_states_prime), shape=action_probs.shape)
-        q_r = tfm.minimum(q1, q2) - self._alpha * log_probs
+        entropy_part = tf.concat(
+            [self._alpha * log_probs[:, :len(ACTIONS)], self._l_alpha * log_probs[:, len(ACTIONS):]], axis=1)
+        q_r = tfm.minimum(q1, q2) - entropy_part
         q_r_mean = tf.math.reduce_sum(action_probs * q_r, axis=1)
         targets = self._reward_scale * tf.reshape(rewards, q_r_mean.shape) + self._gamma * (
                 1 - tf.repeat(dones,axis=0,repeats=len(self._agent_ids))) * q_r_mean
         loss_1, abs_11, abs_12 = self._critic_update(self._critic_1, flattened_states, actions, targets)
         loss_2, abs_21, abs_22 = self._critic_update(self._critic_2, flattened_states, actions, targets)
-        entropy = -tf.reduce_mean(tf.reduce_sum(action_probs * log_probs, axis=1))
-        return tf.add(loss_1, loss_2), tf.reduce_mean(tf.add(abs_11,abs_21)), tf.reduce_mean(tf.add(abs_12,abs_22)), log_probs, entropy
+        entropy = -tf.reduce_mean(tf.reduce_sum((action_probs * log_probs)[:,:len(ACTIONS)], axis=1))
+        l_entropy = -tf.reduce_mean(tf.reduce_sum((action_probs * log_probs)[:,len(ACTIONS):], axis=1))
+        return tf.add(loss_1, loss_2), tf.reduce_mean(tf.add(abs_11,abs_21)), tf.reduce_mean(tf.add(abs_12,abs_22)), log_probs, entropy, l_entropy
 
     def _critic_update(self, critic, states, actions, targets):
         with tf.GradientTape() as tape:
@@ -161,7 +165,7 @@ class SACAgent:
                     actor=actor)
                 q = tf.reshape(tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)),
                                shape=action_probs.shape)
-                entropy_part = self._alpha * tf.concat([log_probs[:,:len(ACTIONS)],tf.zeros((log_probs.shape[0],log_probs.shape[1]-len(ACTIONS)))],axis=1)
+                entropy_part = tf.concat([self._alpha * log_probs[:,:len(ACTIONS)],self._l_alpha*log_probs[:,len(ACTIONS):]],axis=1)
                 sum_part = tfm.reduce_sum(action_probs * (entropy_part - q), axis=1)
                 loss = tfm.reduce_mean(sum_part)
             gradients = tape.gradient(loss, actor.trainable_variables)

@@ -22,6 +22,7 @@ class RunConfig:
     SELF_PLAY = True
     TIME_STEPS = 10
     ALPHA = 0.06
+    L_ALPHA = 0.03
     GAMMA = 0.99
     TARGET_ENTROPY = 1.
 
@@ -46,7 +47,7 @@ class RunConfig:
 
     # buffer
     MAX_REPLAY_BUFFER_SIZE = 10000
-    PRE_SAMPLING_STEPS = 10000
+    PRE_SAMPLING_STEPS = 100
 
     # training
     ENVIRONMENT_STEPS_PER_TRAINING = 500
@@ -105,5 +106,5 @@ class RunConfig:
                                                                 number_of_big_layers=self.NUMBER_OF_BIG_LAYERS, time_steps=self.TIME_STEPS),
                                seed=self.SEED,
                                env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE, alpha=self.ALPHA,
-                               target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA)
+                               target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, l_alpha=self.L_ALPHA)
         self.trainer.train(training_steps_per_update=self.TRAININGS_PER_TRAINING, render=self.RENDER, pre_sampling_steps=self.PRE_SAMPLING_STEPS, epochs=self.EPOCHS,run_desc=self.name,environment_steps_before_training=self.ENVIRONMENT_STEPS_PER_TRAINING)

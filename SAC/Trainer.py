@@ -12,7 +12,7 @@ from environment.env import RenderSaveExtended
 from environment.envbatcher import EnvBatcher
 from environment.render import render_permanently
 from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, MAX_Q_VALUES, ALPHA_VALUES, \
-    ENTROPY, N_AGENT_RETURNS
+    ENTROPY, L_ENTROPY, N_AGENT_RETURNS
 from domain import ACTIONS
 from plots import plot_multiple
 from timer import Timer, MultiTimer
@@ -45,7 +45,7 @@ class Trainer:
     # todo cnn
     def __init__(self, environment, self_play: bool, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, max_replay_buffer_size: int, recurrent: bool,
-                 learning_rate, gamma, alpha,env_parallel: int,seed:int,run_name:str,
+                 learning_rate, gamma, alpha,l_alpha:float, env_parallel: int,seed:int,run_name:str,
                  batch_size: int, target_entropy,model_path="model/", tau=0.005, reward_scale=1):
         self._loss_logger = LossLogger()
         self._env_batcher = EnvBatcher(env=environment, batch_size=env_parallel)
@@ -56,7 +56,7 @@ class Trainer:
                                action_dim=action_dim, actor_network_generator=actor_network_generator,
                                critic_network_generator=critic_network_generator, recurrent=recurrent,
                                learning_rate=learning_rate, gamma=gamma, tau=tau, reward_scale=reward_scale,
-                               alpha=alpha, batch_size=batch_size, model_path=model_path, target_entropy=target_entropy)
+                               alpha=alpha,l_alpha=l_alpha, batch_size=batch_size, model_path=model_path, target_entropy=target_entropy)
         self._environment = environment
         self._batch_size = batch_size
         self._agent_ids = agent_ids
@@ -65,8 +65,8 @@ class Trainer:
             self._agent.load_models(name="", run_name=run_name)
             self._loss_logger.load(path="logger")
         else:
-            self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES], smoothed=100)
-            self._loss_logger.add_lists([ALPHA_VALUES, ENTROPY], smoothed=10)
+            self._loss_logger.add_lists([CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES, ENTROPY, L_ENTROPY], smoothed=100)
+            self._loss_logger.add_lists([ALPHA_VALUES], smoothed=10)
             self._loss_logger.add_lists([RETURNS, N_AGENT_RETURNS(2), N_AGENT_RETURNS(3)], smoothed=1000)
 
     def _env_step(self, observation_array, multitimer: Optional[MultiTimer], return_array: np.ndarray):
@@ -166,7 +166,7 @@ class Trainer:
     def learn(self) -> None:
             states, actions, rewards, states_prime, dones = self._replay_buffer.sample_batch()
             actor_loss, q_values, max_q_values = self._agent.train_step_actor(states)
-            critic_loss, abs_1, abs_2, log_probs, entropy = self._agent.train_step_critic(
+            critic_loss, abs_1, abs_2, log_probs, entropy, l_entropy = self._agent.train_step_critic(
                 states=tf.reshape(tensor=states, shape=self.extended_shape),
                 actions=tf.reshape(tensor=actions, shape=(
                     self._batch_size, len(self._agent_ids) * self._environment.stats.action_dimension)),
@@ -178,8 +178,8 @@ class Trainer:
             self._agent.update_target_weights()
             self._loss_logger.add_aggregatable_values(
                 {CRITIC_LOSS: critic_loss, LOG_PROBS: log_probs, ACTOR_LOSS: actor_loss, Q_VALUES: q_values,
-                 MAX_Q_VALUES: max_q_values, ENTROPY: entropy})
-            self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES, MAX_Q_VALUES, ENTROPY])
+                 MAX_Q_VALUES: max_q_values, ENTROPY: entropy,L_ENTROPY: l_entropy})
+            self._loss_logger.avg_aggregatables([CRITIC_LOSS, LOG_PROBS, ACTOR_LOSS, Q_VALUES, MAX_Q_VALUES, ENTROPY, L_ENTROPY])
 
     # todo sachen auf notion packen
 

@@ -11,6 +11,7 @@ Q_VALUES = "q_values"
 MAX_Q_VALUES = "max_q_values"
 ALPHA_VALUES = "alpha"
 ENTROPY = "entropy"
+L_ENTROPY = "l_entropy"
 N_AGENT_RETURNS = lambda n : f"{n}_agent_returns"
 
 class LossLogger:
