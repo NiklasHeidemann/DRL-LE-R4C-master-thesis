@@ -17,7 +17,7 @@ def make_config(name: str, special_vars: Dict[str, Any]):
     return RunConfig(params=params)
 
 runconfigs = [
-    make_config("a_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.06}),
+    #make_config("a_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.06}),
     make_config("b_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.1}),
     make_config("c_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.03}),
     make_config("d_three_race_no_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 0,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False}),

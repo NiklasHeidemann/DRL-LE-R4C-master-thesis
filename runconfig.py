@@ -62,7 +62,13 @@ class RunConfig:
             assert key in self.__dir__()
             setattr(self, key, value)
     def __call__(self):
+        try:
+            self._catched_call()
+        except Exception as e:
+            with open(f"error_{self.name}_error.txt", "w") as f:
+                f.write(str(e))
 
+    def _catched_call(self):
         random.seed(self.SEED)
         tf.random.set_seed(self.SEED)
         if self.REWARD_TYPE == "race":
