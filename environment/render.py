@@ -42,7 +42,7 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
     for index, (id, movement) in enumerate(last_agent_movements.items()):
         text_field = my_font.render(f"{id}:     {ACTIONS[np.argmax(movement)]}", True, background_color)
         window.blit(text_field, (550,(index+1)*100+20))
-        text_field = my_font.render(f"com:     {_map_communication_to_str(last_communication[id])}", True, background_color)
+        text_field = my_font.render(f"com:     {_map_communication_to_str(last_communication[id]) if len(last_communication[id])>0 else ''}", True, background_color)
         window.blit(text_field, (550, (index+1)*100+40))
         text_field = my_font.render("max_q_val:   {:.2f}".format(max_q_value[id][0]), True, background_color)
         window.blit(text_field, (550, (index+1)*100+60))

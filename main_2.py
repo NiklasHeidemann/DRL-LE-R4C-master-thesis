@@ -7,25 +7,26 @@ import tensorflow as tf
 from domain import visible_positions_13
 from environment.reward import RaceReward
 from language.predictGoal import TrainPredictGoal
-from runconfig import RunConfig
+from runconfig import SACConfig, PPOConfig
 
 matplotlib.use("agg")
 
-def make_config(name: str, special_vars: Dict[str, Any]):
+def make_config(name: str, algo:str, special_vars: Dict[str, Any]):
     params = {"name": name, "VISIBLE_POSITIONS": visible_positions_13}
     params.update(special_vars)
-    return RunConfig(params=params)
+    config_class = SACConfig if algo == "sac" else (PPOConfig if algo == "ppo" else None)
+    return config_class(params=params)
 
 runconfigs = [
-make_config("f_three_coop_no_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":2, "NUMBER_COMMUNICATION_CHANNELS": 0,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": True, "ALPHA": 0.08}),
+make_config("ppo_three_coop_no_com", "ppo", {"COMMUNISM":True, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 0,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": True, "ALPHA": 0.08}),
     #make_config("a_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.06}),
-    make_config("e_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":2, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": True, "ALPHA": 0.08, "L_ALPHA": 0.04}),
+    #make_config("e_three_race_com", "ppo", {"COMMUNISM":False, "NUMBER_OF_AGENTS":2, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": True, "ALPHA": 0.08, "L_ALPHA": 0.04}),
     #make_config("c_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.03}),
     #make_config("d_three_race_no_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 0,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False}),
     #make_config("three_coop_com", {"COMMUNISM":True, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0.}),
 ]
 for config in runconfigs:
-    config()
+    config(catched=False)
 #sac_agent._agent._critic_1.summary()
 #sac_agent._agent._actor.summary() if SELF_PLAY else sac_agent._agent._actors["0"].summary()
 #sac_agent.test(n_samples=2, verbose_samples=0)

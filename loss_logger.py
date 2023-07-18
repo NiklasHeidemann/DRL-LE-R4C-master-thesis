@@ -5,6 +5,7 @@ import numpy as np
 ACTOR_LOSS = "actor_losses"
 OTHER_ACTOR_LOSS = "other_actor_losses"
 CRITIC_LOSS = "critic_losses"
+KLD = "kld"
 LOG_PROBS = "log_probs"
 RETURNS = "returns"
 Q_VALUES = "q_values"

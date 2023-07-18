@@ -1,6 +1,9 @@
 import random
 from collections import deque
 from typing import List, Tuple, Dict, Optional
+
+import gym as gym
+import gymnasium
 import tensorflow as tf
 import numpy as np
 from domain import AgentID
@@ -17,7 +20,7 @@ DEFAULT_COMMUNCIATIONS = lambda size_vocabulary, number_communication_channels: 
 
 def _map_communication_to_str(communication: np.ndarray) -> str:
     chars = []
-    size_vocabulary = len(communication)/sum(communication)
+    size_vocabulary = int(len(communication)/sum(communication))
     assert int(size_vocabulary) == size_vocabulary
     for index in range(0, len(communication), int(size_vocabulary) + 1):
         token = communication[index:index + size_vocabulary + 1]
@@ -30,7 +33,7 @@ def _map_communication_to_str(communication: np.ndarray) -> str:
     return ''.join(chars)
 
 
-class CoopGridWorld:
+class CoopGridWorld(gymnasium.Env):
     _grid: np.ndarray = None
     _stats: Stats = Stats()
     _agent_positions: Dict[AgentID, PositionIndex] = None
@@ -55,7 +58,7 @@ class CoopGridWorld:
         self._agents_locked = {agent_id: -1 for agent_id in self._stats.agent_ids}
         #self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
         self._last_observations = deque([self._obs_array]*self._stats.recurrency)
-        return self.obs
+        return self.obs, {}
 
 
     def _obs_for_agent(self,agent_id: str)->np.ndarray:
@@ -132,7 +135,7 @@ class CoopGridWorld:
 
     def render(self) -> RenderSave:
         grid = '\n'+'\n'.join([''.join([self._map_cell_to_char(pos=(x,y)) for y in range(self._grid.shape[1])]) for x in range(self._grid.shape[0])])
-        communication = '\t'.join([f"{agent_id}: '{_map_communication_to_str(communication=com)}'" for agent_id, com in self._communications[-1].items()])
+        communication = '\t'.join([f"{agent_id}: '{_map_communication_to_str(communication=com) if len(com)>0 else ''}'" for agent_id, com in self._communications[-1].items()])
         output = grid + '\n' + communication
         #print(output)
         render_save = self._grid.copy(), self._agent_positions.copy(), self._last_agent_actions[-1], self._communications[-1], self.stats.time_step
@@ -160,6 +163,14 @@ class CoopGridWorld:
         env =  CoopGridWorld(generator=self._generator, compute_reward=self._compute_reward, xenia_lock=self._xenia_lock, xenia_permanence=self._xenia_permanence)
         env._stats = self._stats
         return env
+
+    @property
+    def observation_space(self)->gymnasium.spaces.box.Box:
+        return gymnasium.spaces.box.Box(low=-1, high=1, shape=[self.stats.recurrency, self._stats.number_of_agents,self.stats.observation_dimension], dtype=np.float32)
+
+    @property
+    def action_space(self)->gymnasium.spaces.MultiDiscrete:
+        return gymnasium.spaces.MultiDiscrete([len(ACTIONS)] + [self._stats.size_vocabulary] * self._stats.number_communication_channels)
 
     @property
     def current_type(self)->ENV_TYPE:

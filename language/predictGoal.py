@@ -22,7 +22,7 @@ class TrainPredictGoal:
         communications = []
         type_of_returns = []
         for index in range(NUMBER_SAMPLES):
-            observation_array = environment.reset()
+            observation_array, _ = environment.reset()
             while True:
                     (_, new_observation_array, reward_array, done),_ = agent.act(
                         observation_array, deterministic=True, env=environment)

@@ -1,0 +1,1 @@
+Input 0 of layer "model_6" is incompatible with the layer: expected shape=(None, 10, 174), found shape=(10, 2, 87)

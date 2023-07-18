@@ -185,7 +185,7 @@ class Trainer:
 
     def _pre_sample(self, pre_sampling_steps: int):
         print(f"Random exploration for {pre_sampling_steps} steps!")
-        observation_array = self._environment.reset()
+        observation_array, _ = self._environment.reset()
         ret = 0
         for _ in range(pre_sampling_steps):
             (actions_array, new_observation_array, reward_array, done), _ = self._agent.act(state=observation_array,
@@ -195,7 +195,7 @@ class Trainer:
                                                state_=new_observation_array, done=done)
             if done:
                 ret = 0
-                observation_array = self._environment.reset()
+                observation_array, _ = self._environment.reset()
             else:
                 observation_array = new_observation_array
 
@@ -203,7 +203,7 @@ class Trainer:
         returns = []
         render_save = []
         for index in range(n_samples):
-            observation_array = self._environment.reset()
+            observation_array,_ = self._environment.reset()
             action_probs = defaultdict(lambda: np.zeros(shape=(1, len(ACTIONS))))
             return_ = 0
             while True:

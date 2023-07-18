@@ -22,7 +22,7 @@ def create_policy_network(learning_rate, state_dim, layer_size:int, lstm_size: i
     action_output = Dense(len(ACTIONS), activation=tf.nn.softmax)(x)
     com_channel_outputs = [Dense(size_vocabulary + 1, activation = tf.nn.softmax)(x) for _ in range(number_communication_channels)]
     model = keras.Model(inputs=inputs, outputs=[action_output] + com_channel_outputs)
-    model.compile(optimizer=Adam(learning_rate=learning_rate))
+    model.compile(optimizer=Adam(learning_rate=learning_rate,clipnorm=1.0,clipvalue=0.5))
     return model
 
 def create_q_network(learning_rate, state_dim, action_dim, layer_size:int, lstm_size: int, time_steps: int, agent_num: int, number_of_big_layers: int = 3, recurrent: bool=False):
@@ -36,6 +36,19 @@ def create_q_network(learning_rate, state_dim, action_dim, layer_size:int, lstm_
         x = Dense(layer_size, activation=tf.nn.relu,kernel_regularizer=tf.keras.regularizers.l2(0.01) )(x)
     out = Dense(agent_num*action_dim, activation=None)(x)
     model = keras.Model(inputs=inputs, outputs=out)
-    model.compile(optimizer=Adam(learning_rate=learning_rate))
+    model.compile(optimizer=Adam(learning_rate=learning_rate,clipnorm=1.0,clipvalue=0.5))
     return model
 
+def create_value_network(learning_rate, state_dim, action_dim, layer_size:int, lstm_size: int, time_steps: int, agent_num: int, number_of_big_layers: int = 3, recurrent: bool=False):
+    inputs = keras.Input(shape=(time_steps, state_dim * agent_num))
+    x = inputs
+    if recurrent:
+        x = LSTM(lstm_size)(x)
+    else:
+        x = Reshape([state_dim*agent_num])(x)
+    for _ in range(number_of_big_layers-recurrent):
+        x = Dense(layer_size, activation=tf.nn.relu,kernel_regularizer=tf.keras.regularizers.l2(0.01) )(x)
+    out = Dense(agent_num, activation=None)(x)
+    model = keras.Model(inputs=inputs, outputs=out)
+    model.compile(optimizer=Adam(learning_rate=learning_rate,clipnorm=1.0,clipvalue=0.5))
+    return model

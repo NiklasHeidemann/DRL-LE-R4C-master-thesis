@@ -15,7 +15,7 @@ class EnvBatcher:
         new_observation_array = observation_array.copy()
         for index, (env, m) in enumerate(zip(self._envs, mask)):
             if m:
-                new_observation_array[index] = env.reset()
+                new_observation_array[index], _ = env.reset()
         return new_observation_array
 
     def step(self, actions_batch: np.ndarray):
@@ -28,7 +28,7 @@ class EnvBatcher:
         return obs, reward, terminated, truncated
 
     def reset_all(self):
-        return np.array([env.reset() for env in self._envs])
+        return np.array([env.reset()[0] for env in self._envs])
 
     def render(self, index: int):
         return self._envs[index].render()

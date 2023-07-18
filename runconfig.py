@@ -1,7 +1,11 @@
+from abc import abstractmethod
 from functools import partial
 from typing import Tuple, Dict, Any, Callable
 
-from SAC.GenericMLPs1D import create_policy_network, create_q_network
+from typing_extensions import Protocol
+
+from PPO.PPOTrainer import PPOTrainer
+from SAC.GenericMLPs1D import create_policy_network, create_q_network, create_value_network
 from SAC.Trainer import Trainer
 from environment.env import CoopGridWorld
 from environment.generator import RandomWorldGenerator, ChoiceWorldGenerator, MultiGenerator
@@ -9,19 +13,19 @@ from environment.reward import ComputeReward, RaceReward
 import random
 import tensorflow as tf
 
-class RunConfig:
+class Config(Protocol):
     name: str = None
     VISIBLE_POSITIONS: Callable = None
     # network
     BATCH_SIZE = 128
     LAYER_SIZE = 32
-    LEARNING_RATE = 0.001
+    LEARNING_RATE = 0.0005
     LSTM_SIZE = 32
     NUMBER_OF_BIG_LAYERS = 2
     RECURRENT = True
     SELF_PLAY = True
     TIME_STEPS = 10
-    ALPHA = 0.06
+    ALPHA = 0.1
     L_ALPHA = 0.03
     GAMMA = 0.99
     TARGET_ENTROPY = 1.
@@ -34,7 +38,7 @@ class RunConfig:
     COMMUNISM = True
     AGENT_DROPOUT_PROBS = 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
     NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.08, 0.15)
-    OBJECT_COLOR_RANGE = (1, 5)
+    OBJECT_COLOR_RANGE = (1, 1)
     POS_REWARD = 2
     NEG_REWARD = -0.1
     REWARD_TYPE = "race"
@@ -47,7 +51,7 @@ class RunConfig:
 
     # buffer
     MAX_REPLAY_BUFFER_SIZE = 10000
-    PRE_SAMPLING_STEPS = 10000
+    PRE_SAMPLING_STEPS = 100
 
     # training
     ENVIRONMENT_STEPS_PER_TRAINING = 500
@@ -58,16 +62,17 @@ class RunConfig:
     FROM_SAVE = False
     RENDER = False
 
-    def __init__(self, params: Dict[str, Any]):
-        for key, value in params.items():
-            assert key in self.__dir__()
-            setattr(self, key, value)
-    def __call__(self):
-        try:
+    def __call__(self, catched=True):
+        if not catched:
             self._catched_call()
-        except Exception as e:
-            with open(f"error_{self.name}_error.txt", "w") as f:
-                f.write(str(e))
+        else:
+            try:
+                self._catched_call()
+            except Exception as e:
+                print(e)
+                with open(f"error_{self.name}_error.txt", "w") as f:
+                    f.write(str(e))
+
 
     def _catched_call(self):
         random.seed(self.SEED)
@@ -94,7 +99,24 @@ class RunConfig:
         env.stats.visible_positions = self.VISIBLE_POSITIONS
         env.stats.recurrency = self.TIME_STEPS
         env.reset()
-        self.trainer = Trainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY, agent_ids=env.stats.agent_ids,
+        self.trainer = self.get_trainer(env=env)
+        self.trainer.train(training_steps_per_update=self.TRAININGS_PER_TRAINING, render=self.RENDER,
+                           pre_sampling_steps=self.PRE_SAMPLING_STEPS, epochs=self.EPOCHS, run_desc=self.name,
+                           environment_steps_before_training=self.ENVIRONMENT_STEPS_PER_TRAINING)
+
+
+    @abstractmethod
+    def get_trainer(self, env):
+        ...
+
+class SACConfig(Config):
+    def __init__(self, params: Dict[str, Any]):
+        for key, value in params.items():
+            assert key in self.__dir__()
+            setattr(self, key, value)
+
+    def get_trainer(self, env):
+        return Trainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY, agent_ids=env.stats.agent_ids,
                                state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
                                recurrent=self.RECURRENT,
                                run_name=self.name,
@@ -107,4 +129,28 @@ class RunConfig:
                                seed=self.SEED,
                                env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE, alpha=self.ALPHA,
                                target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, l_alpha=self.L_ALPHA)
-        self.trainer.train(training_steps_per_update=self.TRAININGS_PER_TRAINING, render=self.RENDER, pre_sampling_steps=self.PRE_SAMPLING_STEPS, epochs=self.EPOCHS,run_desc=self.name,environment_steps_before_training=self.ENVIRONMENT_STEPS_PER_TRAINING)
+
+class PPOConfig(Config):
+    EPSILON = 0.2
+    GAE_LAMBDA = 0.95
+    KLD_THRESHHOLD = 0.05
+    STEPS_PER_TRAJECTORIE = 100
+    def __init__(self, params: Dict[str, Any]):
+        for key, value in params.items():
+            assert key in self.__dir__()
+            setattr(self, key, value)
+
+    def get_trainer(self, env):
+        return PPOTrainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY, agent_ids=env.stats.agent_ids,
+                               state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
+                               recurrent=self.RECURRENT,
+                               run_name=self.name,
+                               max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
+                               actor_network_generator=partial(create_policy_network, state_dim=env.stats.observation_dimension,
+                                                               number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE, time_steps = self.TIME_STEPS, size_vocabulary = self.SIZE_VOCABULARY, number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS),
+                               critic_network_generator=partial(create_value_network, state_dim=env.stats.observation_dimension,
+                                                                action_dim=env.stats.action_dimension, layer_size=self.LAYER_SIZE,lstm_size=self.LSTM_SIZE,
+                                                                number_of_big_layers=self.NUMBER_OF_BIG_LAYERS, time_steps=self.TIME_STEPS),
+                               seed=self.SEED, gae_lambda=self.GAE_LAMBDA,
+                               env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE, alpha=self.ALPHA,
+                               target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, l_alpha=self.L_ALPHA, epsilon=self.EPSILON, steps_per_trajectory=self.STEPS_PER_TRAJECTORIE,kld_threshold=self.KLD_THRESHHOLD)
