@@ -1,4 +1,4 @@
-ACTIONS = ["HOLD", "LEFT", "RIGHT", "UP", "DOWN"]
+ACTIONS = ["HOLD", "UP", "DOWN", "LEFT", "RIGHT"]
 ENV_TYPE = int
 AgentID = str
 def visible_positions_13(x_y):

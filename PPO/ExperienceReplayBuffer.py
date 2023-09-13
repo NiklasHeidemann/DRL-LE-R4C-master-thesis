@@ -62,7 +62,7 @@ class PPOExperienceReplayBuffer:
                                           prob_old_policy=prob_old_policy[:self._max_size-self._current_position]
                                           )
                 self.add_transition_batch(state=state[self._max_size-self._current_position:],
-                        action=action[self._max_size-self._current_position:],advantage=advantage[self._max_size-self._current_position:],prob_old_policy=prob_old_policy[self._max_size-self._current_position:], reward=reward[self._max_size-self._current_position])
+                        action=action[self._max_size-self._current_position:],advantage=advantage[self._max_size-self._current_position:],prob_old_policy=prob_old_policy[self._max_size-self._current_position:], reward=reward[self._max_size-self._current_position:])
                 return
             index = (self._current_position,self._current_position+state.shape[0])
             self._action_memory[index[0]:index[1]] = action

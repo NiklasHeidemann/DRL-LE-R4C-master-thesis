@@ -2,6 +2,7 @@
 *.png
 model
 logs
+logger
 
 # Created by https://www.toptal.com/developers/gitignore/
 

@@ -86,8 +86,9 @@ class RandomWorldGenerator(WorldGenerator):
     def _place_objects(self, grid: np.ndarray, stats: Stats)->np.ndarray:
         stats.number_of_objects = random.randint(int(self._number_of_objects_to_place[0]*stats.grid_size*stats.grid_size), int(self._number_of_objects_to_place[1]*stats.grid_size*stats.grid_size))
         stats.number_of_used_colors = random.randint(self._number_of_object_colors_range[0], self._number_of_object_colors_range[1])
+        used_colors = random.sample(range(self._number_of_object_colors_range[1]),k=stats.number_of_used_colors)
         for _ in range(stats.number_of_objects):
-            object_color = random.randint(0, stats.number_of_used_colors-1)
+            object_color = used_colors[random.randint(0, stats.number_of_used_colors-1)]
             position = self._pick_free_position(grid=grid)
             grid[(position[0],position[1], object_color)] = 1
         return grid

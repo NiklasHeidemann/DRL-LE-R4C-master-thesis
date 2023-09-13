@@ -40,6 +40,10 @@ class Stats:
             + self.values_per_field # locked color
                 )
 
+    def index_of_communication_in_observation(self, agent_index: int) -> int:
+        return (self.number_of_visible_positions*self.values_per_field
+        + (self.size_vocabulary+1)*self.number_communication_channels*agent_index)
+
     @property
     def action_dimension(self)->int:
         return len(ACTIONS) + self.number_communication_channels * (1+self.size_vocabulary)

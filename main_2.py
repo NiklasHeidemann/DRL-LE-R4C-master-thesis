@@ -18,7 +18,7 @@ def make_config(name: str, algo:str, special_vars: Dict[str, Any]):
     return config_class(params=params)
 
 runconfigs = [
-make_config("ppo_three_coop_no_com", "ppo", {"COMMUNISM":True, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 0,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": True, "ALPHA": 0.08}),
+make_config("ppo_three_coop_no_com", "ppo", {}),
     #make_config("a_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.06}),
     #make_config("e_three_race_com", "ppo", {"COMMUNISM":False, "NUMBER_OF_AGENTS":2, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": True, "ALPHA": 0.08, "L_ALPHA": 0.04}),
     #make_config("c_three_race_com", {"COMMUNISM":False, "NUMBER_OF_AGENTS":3, "NUMBER_COMMUNICATION_CHANNELS": 1,"AGENT_DROPOUT_PROBS":0., "XENIA_LOCK": False, "ALPHA": 0.03}),

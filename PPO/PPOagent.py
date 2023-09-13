@@ -7,20 +7,26 @@ from tensorflow import math as tfm
 
 from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
 from domain import ACTIONS
+from environment.env import RenderSave, RenderSaveExtended
 from loss_logger import LossLogger, ALPHA_VALUES
 from tensorflow_probability import distributions as tfp
+from scipy.special import kl_div
+
+from timer import MultiTimer
+
 
 class PPOAgent:
 
     #todo
     def __init__(self, environment_batcher, loss_logger: LossLogger, replay_buffer: ExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
                  actor_network_generator, critic_network_generator, recurrent: bool, epsilon: float,
-                 learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float, l_alpha: float,
-                 batch_size: int , model_path: str, target_entropy: float, seed: int, gae_lamda: float, kld_threshold: float):
+                 learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float, l_alpha: float,social_reward_weight:float,
+                 batch_size: int , model_path: str, target_entropy: float, seed: int, gae_lamda: float, kld_threshold: float, social_influence_sample_size: int):
         self._environment_batcher = environment_batcher
         self._loss_logger = loss_logger
         self._self_play = self_play
         self._action_dim = action_dim
+        self._social_reward_weight = social_reward_weight
         self._epsilon = epsilon
         self._gamma = gamma
         self._tau = tau
@@ -36,6 +42,7 @@ class PPOAgent:
         self._reply_buffer = replay_buffer
         self._agent_ids = agent_ids
         self._gae_lamda = gae_lamda
+        self._social_influence_sample_size = social_influence_sample_size
         if self_play:
             self._actor = actor_network_generator(learning_rate, recurrent=recurrent)
         else:
@@ -106,7 +113,7 @@ class PPOAgent:
         target_network.set_weights(new_wights)
 
 
-    #@tf.function
+    @tf.function
     def train_step_critic(self, states, ret):
         reshaped_states = tf.reshape(states, shape=(states.shape[0], self._environment_batcher._stats.recurrency, self._environment_batcher._stats.observation_dimension * len(self._agent_ids)))
         losses = 0
@@ -121,65 +128,106 @@ class PPOAgent:
             losses+=loss
         return losses, tf.reduce_mean(prev_v)
 
-    #@tf.function
+    @tf.function
     def log_probs_and_entropy_from_policy(self, state, action):
         probability_groups = self._actor(state)
         probability_groups = probability_groups if type(probability_groups) == list else [probability_groups]
-        distributions = [tfp.Categorical(probs=probability_group) for probability_group in probability_groups]
-        log_probs = [distribution.log_prob(tf.argmax(action,axis=1)) for distribution in distributions]
-        entropy = [-tf.reduce_sum(probability_group * tf.math.log(tf.clip_by_value(probability_group, 1e-10, 10)), axis=1) for
-         probability_group in probability_groups]
-        if sum([True in tf.math.is_nan(entropy_group) for entropy_group in entropy]) > 0:
-            raise Exception(
-                f"{sum([tf.reduce_sum(tf.cast(tf.math.is_nan(entropy_group), tf.float32)) for entropy_group in probability_groups])}\n{sum([True in tf.math.is_nan(entropy_group) for entropy_group in log_probs])}\n{tf.reduce_sum(tf.cast(tf.math.is_nan(state),tf.float32))}\n{entropy}")
-        return log_probs, entropy
+        return tf.concat([[log_probs[tf.cast(action,tf.bool)] for log_probs in probability_groups]],axis=-1)
+        #distributions = [tfp.Categorical(probs=probability_group) for probability_group in probability_groups]
+        #log_probs = [distribution.log_prob(tf.argmax(action,axis=1)) for distribution in distributions]
+        #return log_probs
 
+    @tf.function
+    def _tf_train_step_actor(self,state,action,prob_old,advantage):
+        with tf.GradientTape() as tape:
+            probability_groups =  self._actor(state)
+            if self._environment_batcher._stats.number_communication_channels > 0:
+                probability_groups = tf.concat(probability_groups, axis=1)
+            log_prob_current = tf.reduce_sum(probability_groups * action, axis=1) #tf.gather
+            p = tf.math.exp(log_prob_current - prob_old)  # exp() to un do log(p)
+            clipped_p = tf.clip_by_value(p, 1 - self._epsilon, 1 + self._epsilon)
+            policy_loss = -tfm.reduce_mean(tfm.minimum(p * advantage, clipped_p * advantage))
+            l_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[len(ACTIONS):]*tfm.exp(probability_groups[len(ACTIONS):]),axis=1))
+            r_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[:len(ACTIONS)]*tfm.exp(probability_groups[:len(ACTIONS)]),axis=1))
+            entropy_loss = self._alpha * (l_entropy_loss + r_entropy_loss)
+            loss = policy_loss - entropy_loss
+        gradients = tape.gradient(loss, self._actor.trainable_variables)
+        self._actor.optimizer.apply_gradients(zip(gradients, self._actor.trainable_variables))
+        return log_prob_current, loss, l_entropy_loss, r_entropy_loss
 
-    #@tf.function
     def train_step_actor(self, state, action, advantage, prob_old):
+        if tf.reduce_sum(tf.cast(tf.math.is_nan(state),tf.float32)) > 0:
+                raise Exception(f"Actor log_prob_current contain nan, {state} {tf.reduce_sum(tf.cast(tf.math.is_nan(state),tf.float32))}")
         if self._self_play:
-            actor = self._actor
             with tf.GradientTape() as tape:
-                log_prob_current, entropy = self.log_probs_and_entropy_from_policy(state, action)
-                p = tf.math.exp(log_prob_current - prob_old)  # exp() to un do log(p)
-                clipped_p = tf.clip_by_value(p, 1 - self._epsilon, 1 + self._epsilon)
-                policy_loss = -tfm.reduce_mean(tfm.minimum(p * advantage, clipped_p * advantage))
-                entropy_loss = -tfm.reduce_mean(entropy)
-                loss = policy_loss + self._alpha * entropy_loss
-            gradients = tape.gradient(loss, actor.trainable_variables)
+                #log_prob_current = self.log_probs_and_entropy_from_policy(state, action)
+                log_prob_current,loss,l_entropy_loss, r_entropy_loss = self._tf_train_step_actor(state,action,prob_old,advantage=advantage)
             # check whether actor weights contain nan
-            if sum([tf.reduce_sum(tf.cast(tf.math.is_nan(weight),tf.float32)) for weight in gradients]) > 0:
-                raise Exception(f"Actor weights contain nan, {loss} ::: {gradients}")
-            actor.optimizer.apply_gradients(zip(gradients, actor.trainable_variables))
-            log_ratio = prob_old - log_prob_current
+            if tf.reduce_sum(tf.cast(tf.math.is_nan(state),tf.float32)) > 0:
+                raise Exception(f"Actor log_prob_current contain nan, {state} {tf.reduce_sum(tf.cast(tf.math.is_nan(state),tf.float32))}")
+            log_ratio = prob_old - log_prob_current #todo check if this is correct
             kld = tf.math.reduce_mean((tf.math.exp(log_ratio) - 1) - log_ratio)
             early_stopping = kld > self._kld_threshold
-            return loss, early_stopping, entropy_loss, kld
+            return loss, early_stopping, r_entropy_loss, l_entropy_loss, kld
         else:
             raise NotImplementedError()
 
 
-    #@tf.function
+    @tf.function
     def sample_actions(self, states, actor, generator_index:int = 0, deterministic=False):
-        probability_groups = actor(states) # first one for actions, rest for communication channels
-        probability_groups = probability_groups if type(probability_groups) == list else [probability_groups]
-        log_prob_groups = [tf.math.log(probabilities) for probabilities in probability_groups]
+        log_prob_groups = actor(states) # first one for actions, rest for communication channels
+        log_prob_groups = log_prob_groups if type(log_prob_groups) == list else [log_prob_groups]
         if deterministic:
-            action_groups = [tf.argmax(probabilities, axis=1) for probabilities in probability_groups]
+            action_groups = [tf.argmax(probabilities, axis=1) for probabilities in log_prob_groups]
         else:
             #action_groups = [self._generators[generator_index].categorical(logits=log_probs, num_samples=1)[:,0] for log_probs in log_prob_groups]
             action_groups = [tf.random.stateless_categorical(logits=log_probs, num_samples=1, seed=self._generators[generator_index].make_seeds(2)[0])[:,0] for log_probs in log_prob_groups]
-        one_hot_action_groups = [tf.one_hot(actions, depth=probabilities.shape[-1]) for actions, probabilities in zip(action_groups,probability_groups)]
+        if deterministic or self._environment_batcher._stats.number_communication_channels == 0:
+            additional_com_samples_one_hot = None
+        else:
+            additional_com_samples = [tf.random.stateless_categorical(logits=log_probs, num_samples=self._social_influence_sample_size, seed=self._generators[generator_index].make_seeds(2)[0]) for log_probs in log_prob_groups[1:]]
+            additional_com_samples_one_hot = tf.concat([tf.one_hot(sample, depth=self._environment_batcher._stats.size_vocabulary+1) for sample in additional_com_samples],axis=2)
+        one_hot_action_groups = [tf.one_hot(actions, depth=probabilities.shape[-1]) for actions, probabilities in zip(action_groups,log_prob_groups)]
         # check whether probabilitygroups contains nan
-        if sum([tf.reduce_sum(tf.cast(tf.math.is_nan(probability_group),tf.float32)) for probability_group in probability_groups]) > 0:
-            raise Exception(f"{sum([tf.reduce_sum(tf.cast(tf.math.is_nan(probability_group),tf.float32)) for probability_group in probability_groups])}\n{tf.reduce_sum(tf.cast(tf.math.is_nan(states),tf.float32))}{probability_groups}")
-        return tf.squeeze(tf.concat(one_hot_action_groups,axis=-1)), tf.concat(probability_groups,axis=-1), tf.concat(log_prob_groups,axis=-1)
+        return tf.squeeze(tf.concat(one_hot_action_groups,axis=-1)), tf.concat(log_prob_groups,axis=-1), additional_com_samples_one_hot
 
 
-    def act_batched(self, batched_state, env_batcher,  deterministic:bool, multitimer=None) -> Tuple[Tuple, np.ndarray]:
+    def sample_additional_probs(self, states, actor, additional_com_samples, original_action, multitimer: MultiTimer):
+        #multitimer.start("repeat_states")
+        repeated_states = np.array(tf.repeat(tf.expand_dims(states, axis=1), axis=1, repeats=additional_com_samples.shape[2]))
+        #multitimer.stop("repeat_states")
+        mean_prob_original_action = np.zeros(shape=(self._environment_batcher.size, len(self._agent_ids), len(self._agent_ids)-1, len(ACTIONS)))
+        for index_influencer in range(states.shape[-2]): #for each agent
+            for index_listener in range(states.shape[-2]): #for all other agents
+                if index_listener == index_influencer:
+                    continue
+                #multitimer.start("pos_of_com")
+                pos_of_com = self._environment_batcher._stats.index_of_communication_in_observation(agent_index=index_influencer)
+                #multitimer.stop("pos_of_com")
+                #multitimer.start("repeated_states2")
+                repeated_states[:,:,-1,index_listener,pos_of_com:pos_of_com+additional_com_samples.shape[3]] = additional_com_samples[:,index_influencer]
+                #multitimer.stop("repeated_states2")
+                #multitimer.start("relevant_states")
+                relevant_states = np.reshape(repeated_states[:, :, :, index_listener, :], newshape=(
+                    repeated_states.shape[0] * repeated_states.shape[1], repeated_states.shape[2],
+                    repeated_states.shape[4]))
+                #multitimer.stop("relevant_states")
+                #multitimer.start("actor")
+                log_prob_actions = actor(relevant_states)[0]
+                #multitimer.stop("actor")
+                #multitimer.start("reshape_mean_set")
+                reshaped_log_prob_actions = tf.reshape(log_prob_actions, shape=(repeated_states.shape[0], repeated_states.shape[1], len(ACTIONS)))
+                means_log_probs = tf.reduce_mean(reshaped_log_prob_actions,axis=1)
+                mean_prob_original_action[:,index_influencer,index_listener if index_listener<index_influencer else index_listener-1,:]  = means_log_probs
+                #multitimer.stop("reshape_mean_set")
+                #mean_prob_original_action[:,index_influencer,index_listener if index_listener<index_influencer else index_listener-1]  = tf.reduce_min(means_log_probs*relevant_actions,axis=1)
+        return mean_prob_original_action
+
+
+    def act_batched(self, batched_state, env_batcher,  deterministic:bool, include_social: bool, multitimer=None,) -> Tuple[Tuple, np.ndarray, np.ndarray]:
         if multitimer is not None:
             multitimer.start("batch_compute_action_dict")
-        batched_actions, batched_action_probs = self._wrap_batched_compute_actions_one_hot_and_log_prob(batched_state, deterministic)
+        batched_actions, batched_action_probs, batched_additional_com_samples = self._wrap_batched_compute_actions_one_hot_and_log_prob(batched_state, deterministic)
         assert not tf.math.reduce_any(tf.math.is_nan(batched_action_probs)), f"{batched_action_probs}{batched_state}"
         if multitimer is not None:
             multitimer.stop("batch_compute_action_dict")
@@ -187,10 +235,23 @@ class PPOAgent:
         observation_prime, reward, done, truncated = env_batcher.step(batched_actions)
         if multitimer is not None:
             multitimer.stop("env_step")
+            multitimer.start("sample_additional_probs")
+        if include_social:
+            mean_prob_alternatives = self.sample_additional_probs(observation_prime, self._actor, batched_additional_com_samples, batched_actions, multitimer=multitimer)
+            social_influence_pairs = np.array([[[(batched_action_probs[index,index_listener,:len(ACTIONS)], mean_prob_alternatives[index,index_influencer,index_listener if index_listener<index_influencer else index_listener -1]) for index_listener in range(len(self._agent_ids))if index_listener!=index_influencer]   for index_influencer in range(len(self._agent_ids)) ] for index in range(self._environment_batcher.size)])
+            exp_social_influence_pairs = np.exp(social_influence_pairs)
+            kl_div_ = kl_div(exp_social_influence_pairs[:, :, :, 0], exp_social_influence_pairs[:, :, :, 1])
+            social_reward = np.average(np.sum(kl_div_, axis=3), axis=2)
+        else:
+            social_reward = 0.
+        reward += self._social_reward_weight * social_reward
+        assert not tf.math.reduce_any(tf.math.is_nan(observation_prime)), f"{observation_prime}{batched_state}"
+        if multitimer is not None:
+            multitimer.stop("sample_additional_probs")
         return (
-            (batched_actions, observation_prime, reward, tf.math.logical_or(done, truncated)),batched_action_probs)
+            (batched_actions, observation_prime, reward, tf.math.logical_or(done, truncated)),batched_action_probs, social_reward)
     def act(self, state, env,  deterministic:bool, multitimer=None) -> Tuple[Tuple, np.ndarray]:
-        actions, log_probs = self._compute_actions_one_hot_and_log_prob(state, deterministic)
+        actions, log_probs, _ = self._compute_actions_one_hot_and_log_prob(state, deterministic)
 
         observation_prime, reward, done, truncated = env.step(actions)
         return (
@@ -198,27 +259,27 @@ class PPOAgent:
 
 
     def _wrap_batched_compute_actions_one_hot_and_log_prob(self, state, deterministic):
-        actions_one_hot, log_probs = self._batched_compute_actions_one_hot_and_log_prob(state, deterministic)
+        actions_one_hot, log_probs, additional_com_samples = self._batched_compute_actions_one_hot_and_log_prob(state, deterministic)
         if state.shape[0]==1:
             actions_one_hot, log_probs = tf.expand_dims(actions_one_hot, axis=1), log_probs
-        return np.moveaxis(np.array(actions_one_hot), 0, 1), np.moveaxis(np.array(log_probs), 0, 1)
+        return np.moveaxis(np.array(actions_one_hot), 0, 1), np.moveaxis(np.array(log_probs), 0, 1), np.moveaxis(np.array(additional_com_samples), 0, 1)
 
 
-    #@tf.function
+    @tf.function
     def _batched_compute_actions_one_hot_and_log_prob(self, state, deterministic):
-        actions_one_hot, _, log_probs = list(zip(*[self.sample_actions(deterministic=deterministic,generator_index=index,
+        actions_one_hot, log_probs, additional_com_samples = list(zip(*[self.sample_actions(deterministic=deterministic,generator_index=index,
                                                                            states= tf.convert_to_tensor(state[:,:,index,:]),
                                                                            actor=self._actor) for index in range(len(self._agent_ids))]))
-        return actions_one_hot, log_probs
+        return actions_one_hot, log_probs, additional_com_samples
 
 
     def _compute_actions_one_hot_and_log_prob(self, state, deterministic):
         assert state.shape == (self._environment_batcher._stats.recurrency, len(self._agent_ids), self._environment_batcher._stats.observation_dimension)
-        actions_one_hot, _, log_probs = list(zip(*[self.sample_actions(deterministic=deterministic,generator_index=index,
+        actions_one_hot, log_probs, additional_com_samples = list(zip(*[self.sample_actions(deterministic=deterministic,generator_index=index,
                                                                            states=tf.expand_dims(
                                                                                tf.convert_to_tensor(state[:,index,:]), axis=0),
                                                                            actor=self._actor) for index in range(len(self._agent_ids))]))
-        return np.array(actions_one_hot), np.squeeze(np.array(log_probs))
+        return np.array(actions_one_hot), np.squeeze(np.array(log_probs)), additional_com_samples
 
 
     def train_step_temperature(self, states):
@@ -252,7 +313,7 @@ class PPOAgent:
         v2 = self._critic_2(reshaped_states)
         return tf.minimum(v1, v2)
 
-    def sample_trajectories(self, steps_per_trajectory):
+    def sample_trajectories(self, steps_per_trajectory, render=False):
         observation = self._environment_batcher.reset_all()
         resets = 1
         rewards = []
@@ -261,22 +322,41 @@ class PPOAgent:
         observations = []
         actions = []
         probabilities = []
+        current_render_list: List[RenderSaveExtended] = []
+        render_list: List[List[RenderSaveExtended]] = []
         last_done = [False] * self._environment_batcher.size
+        social_rewards = []
 
-        for _ in range(steps_per_trajectory//self._environment_batcher.size):
-            (action, new_observation, reward, next_done), log_probs = self.act_batched(observation, self._environment_batcher, deterministic=False)
-            rewards.append(reward)
-            values.append(self.get_values(states=observation))
-            dones.append(last_done)
-            observations.append(observation)
-            actions.append(action)
-            action_indexes = tf.argmax(action, axis=2)
-            probabilities.append([(log_probs[index][:,action_indexes[index]].diagonal()) for index in range(log_probs.shape[0])])
-            observation = self._environment_batcher.reset(mask=next_done, observation_array=new_observation)
-            last_done = next_done
+        with MultiTimer("env_step") as multitimer:
+            for _ in range(steps_per_trajectory//self._environment_batcher.size):
+                multitimer.start("act_batched")
+                (action, new_observation, reward, next_done), log_probs, social_reward = self.act_batched(observation, self._environment_batcher, deterministic=False,multitimer=multitimer,include_social=True)
+                multitimer.stop("act_batched")
+                rewards.append(reward)
+                social_rewards.append(social_reward)
+                values.append(self.get_values(states=observation))
+                dones.append(last_done)
+                observations.append(observation)
+                actions.append(action)
+                probabilities.append(tf.reduce_sum(log_probs*action,axis=2))
+                if render:
+                    current_render_list.append((self._environment_batcher.render(index=0), np.exp(log_probs[0]),{id: (value, index) for id, value, index in zip(self._agent_ids,values[-1][0],range(100))}))
+                multitimer.start("reset")
+                observation = self._environment_batcher.reset(mask=next_done, observation_array=new_observation)
+                multitimer.stop("reset")
+                if render and next_done[0]:
+                    current_render_list.append((self._environment_batcher.render(index=0), np.exp(log_probs[0]),{id: (value, index) for id, value, index in zip(self._agent_ids,values[-1][0],range(100))}))
+                    render_list.append(current_render_list)
+                    current_render_list = []
+                last_done = next_done
         next_value = self.get_values(states=observation)
-        advantages_list = [self.estimate_advantage(rewards=reward_batch, values=value_batch, dones=done_batch, next_done=next_done_batch, next_value=next_value_batch) for reward_batch, value_batch, done_batch, next_done_batch, next_value_batch in zip(rewards, values, dones, next_done, next_value)]
+        np_rewards = np.array(rewards)
+        np_values = np.array(values)
+        np_dones = np.array(dones)
+        multitimer.start("advantage")
+        advantages_list = [self.estimate_advantage(rewards=np_rewards[:,index], values=np_values[:,index], dones=np_dones[:,index], next_value=next_value[index], next_done=next_done[index]) for index in range(len(next_done))]
+        multitimer.stop("advantage")
         return (tf.convert_to_tensor([element for batch in observations for element in batch]), tf.convert_to_tensor([element for batch in actions for element in batch]),
-                                                 tf.convert_to_tensor([element for batch in advantages_list for element in batch]),
-                                                 tf.convert_to_tensor([element for batch in rewards for element in batch]),
-                                                 tf.convert_to_tensor([element for batch in probabilities for element in batch]))
+                tf.convert_to_tensor([element for batch in zip(*advantages_list) for element in batch]),
+                tf.convert_to_tensor([element for batch in rewards for element in batch]),
+                tf.convert_to_tensor([element for batch in probabilities for element in batch])), render_list, np.average(social_rewards)

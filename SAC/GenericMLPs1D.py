@@ -25,6 +25,25 @@ def create_policy_network(learning_rate, state_dim, layer_size:int, lstm_size: i
     model.compile(optimizer=Adam(learning_rate=learning_rate,clipnorm=1.0,clipvalue=0.5))
     return model
 
+def create_log_policy_network(learning_rate, state_dim, layer_size:int, lstm_size: int, time_steps: int, size_vocabulary: int,
+                          number_communication_channels, number_of_big_layers: int = 3, recurrent: bool=False):
+    inputs = keras.Input(shape=(time_steps, state_dim))
+    x = inputs
+    if recurrent:
+        x = LSTM(lstm_size, activation=tf.nn.relu)(x)
+    else:
+        x = Reshape([state_dim])(x)
+    for _ in range(number_of_big_layers-recurrent):
+        x = Dense(layer_size, activation=tf.nn.relu)(x)
+    #mu = Dense(action_dim, activation=None)(x)
+    #sigma = Dense(action_dim, activation=tf.nn.softplus)(x)
+    action_output = Dense(len(ACTIONS), activation=tf.nn.log_softmax)(x)
+    com_channel_outputs = [Dense(size_vocabulary + 1, activation = tf.nn.log_softmax)(x) for _ in range(number_communication_channels)]
+    model = keras.Model(inputs=inputs, outputs=[action_output] + com_channel_outputs)
+    model.compile(optimizer=Adam(learning_rate=learning_rate,clipnorm=1.0,clipvalue=0.5))
+    return model
+
+
 def create_q_network(learning_rate, state_dim, action_dim, layer_size:int, lstm_size: int, time_steps: int, agent_num: int, number_of_big_layers: int = 3, recurrent: bool=False):
     inputs = keras.Input(shape=(time_steps, state_dim * agent_num))
     x = inputs

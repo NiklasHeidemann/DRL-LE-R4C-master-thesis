@@ -1,5 +1,5 @@
 from domain import visible_positions_13
-
+"""
 # network
 BATCH_SIZE =128
 LAYER_SIZE = 32
@@ -17,13 +17,12 @@ TARGET_ENTROPY = 1.
 WORLD_GENERATOR = "random" # multi or random or choice
 GRID_SIZE_RANGE = (4,8)
 MAX_TIME_STEP = 30
-NUMBER_OF_AGENTS = 3
+NUMBER_OF_AGENTS = 2
 COMMUNISM = True
 AGENT_DROPOUT_PROBS = 0.5 if NUMBER_OF_AGENTS == 3 else 0 # meaning with 0.5 probabilty the third agent is not placed
 NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.08,0.15)
 OBJECT_COLOR_RANGE = (1,5)
 POS_REWARD = 2
-NEG_REWARD = -0.1
 XENIA_LOCK = True
 XENIA_PERMANENCE = False
 
@@ -42,6 +41,9 @@ TRAININGS_PER_TRAINING = 8
 EPOCHS = 300000
 SEED=12
 ENV_PARALLEL = 32
-FROM_SAVE = True
+FROM_SAVE = False
+"""
 RENDER = False
+NEG_REWARD = -0.1
+SEED=12932
 

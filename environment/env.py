@@ -13,7 +13,7 @@ from environment.reward import ComputeReward
 from environment.stats import Stats
 from domain import ACTIONS, ENV_TYPE
 
-RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], Dict[AgentID, np.ndarray], int]
+RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], Dict[AgentID, np.ndarray], int, Dict[AgentID, int]]
 RenderSaveExtended = Tuple[RenderSave, np.ndarray, Dict[AgentID, Tuple[float,float]]]
 
 DEFAULT_COMMUNCIATIONS = lambda size_vocabulary, number_communication_channels: np.concatenate([[1.]+[0.]*size_vocabulary]*number_communication_channels) if number_communication_channels > 0 else []
@@ -22,8 +22,8 @@ def _map_communication_to_str(communication: np.ndarray) -> str:
     chars = []
     size_vocabulary = int(len(communication)/sum(communication))
     assert int(size_vocabulary) == size_vocabulary
-    for index in range(0, len(communication), int(size_vocabulary) + 1):
-        token = communication[index:index + size_vocabulary + 1]
+    for index in range(0, len(communication), int(size_vocabulary)):
+        token = communication[index:index + size_vocabulary]
         index = communication.argmax()
         assert sum(token) == 1, f"{token}, {communication}"
         if index == 0:
@@ -138,7 +138,7 @@ class CoopGridWorld(gymnasium.Env):
         communication = '\t'.join([f"{agent_id}: '{_map_communication_to_str(communication=com) if len(com)>0 else ''}'" for agent_id, com in self._communications[-1].items()])
         output = grid + '\n' + communication
         #print(output)
-        render_save = self._grid.copy(), self._agent_positions.copy(), self._last_agent_actions[-1], self._communications[-1], self.stats.time_step
+        render_save = self._grid.copy(), self._agent_positions.copy(), self._last_agent_actions[-1], self._communications[-1], self.stats.time_step, self._agents_locked.copy()
         return render_save
     def state(self) -> np.ndarray:
         pass
