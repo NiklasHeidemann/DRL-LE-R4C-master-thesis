@@ -17,7 +17,7 @@ from domain import ACTIONS
 from plots import plot_multiple
 from timer import Timer, MultiTimer
 
-class Trainer:
+class SACTrainer:
     """
     Soft Actor-Critic (SAC) Agent
     Based on pseudocode of OpenAI Spinning Up (2022) (https://spinningup.openai.com/en/latest/algorithms/sac.html)
@@ -191,8 +191,8 @@ class Trainer:
             (actions_array, new_observation_array, reward_array, done), _ = self._agent.act(state=observation_array,
                                                                                               deterministic=False, env=self._environment)
             ret += sum(reward_array)
-            self._replay_buffer.add_transition(state=observation_array, action=actions_array, reward=reward_array,
-                                               state_=new_observation_array, done=done)
+            self._replay_buffer.add_transition_batch(state=[observation_array], action=[actions_array], reward=[reward_array],
+                                               state_=[new_observation_array], done=[done])
             if done:
                 ret = 0
                 observation_array, _ = self._environment.reset()

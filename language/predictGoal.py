@@ -1,3 +1,5 @@
+from random import random, sample, choices
+
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import balanced_accuracy_score, accuracy_score
 from sklearn.model_selection import train_test_split
@@ -14,11 +16,18 @@ class TrainPredictGoal:
 
     def __call__(self, environment: CoopGridWorld, agent: SACAgent)->float:
         X, y = self.sample(environment=environment, agent=agent)
+        if len(y) < 10:
+            print("Not enough samples")
+            return 0
         Xtrain, Xtest, ytrain, ytest = train_test_split(X,y, test_size=TEST_SIZE)
         classifier = RandomForestClassifier(random_state=SEED)
         classifier.fit(Xtrain, ytrain)
+        random_predictions = choices(population=classifier.classes_, k=len(ytest))
         pred = classifier.predict(Xtest)
         print("Balanced accuracy:", balanced_accuracy_score(ytest, pred), "; Accuracy:", accuracy_score(ytest, pred))
+        print("Random: Balanced accuracy:", balanced_accuracy_score(ytest, random_predictions), "; Accuracy:", accuracy_score(ytest, random_predictions))
+        train_pred = classifier.predict(Xtrain)
+        print("Trainset: Balanced accuracy:", balanced_accuracy_score(ytrain, train_pred), "; Accuracy:", accuracy_score(ytrain, train_pred))
         return balanced_accuracy_score(ytest, pred)
     def sample(self, environment: CoopGridWorld, agent: SACAgent):
         communications = []

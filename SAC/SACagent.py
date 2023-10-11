@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import math as tfm
 
-from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
+from SAC.ExperienceReplayBuffer import SACExperienceReplayBuffer
 from domain import ACTIONS
 from loss_logger import LossLogger, ALPHA_VALUES
 
@@ -35,10 +35,10 @@ class SACAgent:
     :param model_path: path to the location the model is saved and loaded from
     """
 
-    def __init__(self, environment, loss_logger: LossLogger, replay_buffer: ExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
+    def __init__(self, environment, loss_logger: LossLogger, replay_buffer: SACExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
                  actor_network_generator, critic_network_generator, recurrent: bool,
                  learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float, l_alpha: float,
-                 batch_size: int , model_path: str, target_entropy: float, seed: int):
+                 batch_size: int, model_path: str, target_entropy: float, seed: int):
         self._environment = environment
         self._loss_logger = loss_logger
         self._self_play = self_play

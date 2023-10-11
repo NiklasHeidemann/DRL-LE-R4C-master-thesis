@@ -19,7 +19,7 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
     global window
     background_color = (0, 0, 0)
     textfield_color = (220,220,220)
-    cell_colors = [(255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,255,255)]
+    cell_colors = [(255,0,0),(0,255,0),(0,0,255),(255,255,0),(255,0,255),(0,255,255),(126,0,0),(0,126,0),(0,0,126),(126,126,0),(126,0,126),(0,126,126),(126,126,126)]
     default_cell_color = (220,220,220)
     window.fill(background_color)  # fill background with color
     # make draw calls
@@ -33,15 +33,15 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
     for id, position in agent_positions.items():
         if position is not None:
             row, col = position
-            color = background_color if agents_locked[id]<0 else cell_colors[agents_locked[id]]
-            text_field =my_font.render(id,True,color)
+            text_field =my_font.render(id,True,background_color)
             window.blit(text_field, (col*50+10, row*50+10))
 
     pygame.draw.rect(surface=window,color=textfield_color, rect=(500, 0, 500,500))
     text_field = my_font.render(f"timestep:     {timestep}", True, background_color)
     window.blit(text_field, (550,20))
     for index, (id, movement) in enumerate(last_agent_movements.items()):
-        text_field = my_font.render(f"{id}:     {ACTIONS[np.argmax(movement)]}", True, background_color)
+        color = background_color if agents_locked[id]<0 else cell_colors[agents_locked[id]]
+        text_field = my_font.render(f"{id}:     {ACTIONS[np.argmax(movement)]}", True, color)
         window.blit(text_field, (550,(index+1)*100+20))
         text_field = my_font.render(f"com:     {_map_communication_to_str(last_communication[id]) if len(last_communication[id])>0 else ''}", True, background_color)
         window.blit(text_field, (550, (index+1)*100+40))

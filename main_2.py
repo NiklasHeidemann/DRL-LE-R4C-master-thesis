@@ -5,8 +5,6 @@ import matplotlib
 import tensorflow as tf
 
 from domain import visible_positions_13
-from environment.reward import RaceReward
-from language.predictGoal import TrainPredictGoal
 from runconfig import SACConfig, PPOConfig
 
 matplotlib.use("agg")

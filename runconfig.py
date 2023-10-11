@@ -1,16 +1,16 @@
 from abc import abstractmethod
 from functools import partial
-from typing import Tuple, Dict, Any, Callable
+from typing import Dict, Any, Callable
 
 from typing_extensions import Protocol
 
 import params
 from PPO.PPOTrainer import PPOTrainer
-from SAC.GenericMLPs1D import create_policy_network, create_q_network, create_value_network, create_log_policy_network
-from SAC.Trainer import Trainer
+from training.GenericMLPs1D import create_policy_network, create_critic_network
+from SAC.SACTrainer import SACTrainer
 from environment.env import CoopGridWorld
 from environment.generator import RandomWorldGenerator, ChoiceWorldGenerator, MultiGenerator
-from environment.reward import ComputeReward, RaceReward, SingleComputeReward
+from environment.reward import RaceReward, SingleComputeReward
 import random
 import tensorflow as tf
 
@@ -26,24 +26,24 @@ class Config(Protocol):
     RECURRENT = True
     SELF_PLAY = True
     TIME_STEPS = 10
-    ALPHA = 0.05
-    L_ALPHA = 0.03
+    ALPHA = 0.2
+    L_ALPHA = 0.01
     GAMMA = 0.99
     TARGET_ENTROPY = 1.
 
     #socialinfluence
-    SOCIAL_INFLUENCE_SAMPLE_SIZE = 10
-    SOCIAL_REWARD_WEIGHT = 0.1
+    SOCIAL_INFLUENCE_SAMPLE_SIZE = 30
+    SOCIAL_REWARD_WEIGHT = 0
 
     # environment
     WORLD_GENERATOR = "random"  # multi or random or choice
-    GRID_SIZE_RANGE = (4, 8)
+    GRID_SIZE_RANGE = (4, 16)
     MAX_TIME_STEP = 30
-    NUMBER_OF_AGENTS = 2
+    NUMBER_OF_AGENTS = 3
     COMMUNISM = False
-    AGENT_DROPOUT_PROBS = 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
-    NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.08, 0.3)
-    OBJECT_COLOR_RANGE = (1, 3)
+    AGENT_DROPOUT_PROBS = 0#0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
+    NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6)
+    OBJECT_COLOR_RANGE = (10, 20)
     POS_REWARD = 2
     NEG_REWARD = -0.1
     REWARD_TYPE = "race"
@@ -51,7 +51,7 @@ class Config(Protocol):
     XENIA_PERMANENCE = True
 
     # input
-    NUMBER_COMMUNICATION_CHANNELS = 2
+    NUMBER_COMMUNICATION_CHANNELS = 1
     SIZE_VOCABULARY = OBJECT_COLOR_RANGE[1]
 
     # buffer
@@ -117,31 +117,35 @@ class Config(Protocol):
         ...
 
 class SACConfig(Config):
+    ACTOR_OUTPUT_ACTIVATION = "softmax"
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
             assert key in self.__dir__()
             setattr(self, key, value)
 
     def get_trainer(self, env):
-        return Trainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY, agent_ids=env.stats.agent_ids,
-                               state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
-                               recurrent=self.RECURRENT,
-                               run_name=self.name,
-                               max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
-                               actor_network_generator=partial(create_policy_network, state_dim=env.stats.observation_dimension,
+        output_dim = env.stats.action_dimension * self.NUMBER_OF_AGENTS
+        return SACTrainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY, agent_ids=env.stats.agent_ids,
+                          state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
+                          recurrent=self.RECURRENT,
+                          run_name=self.name,
+                          max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
+                          actor_network_generator=partial(create_policy_network, state_dim=env.stats.observation_dimension, output_activation=self.ACTOR_OUTPUT_ACTIVATION,
                                                                number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE, time_steps = self.TIME_STEPS, size_vocabulary = self.SIZE_VOCABULARY, number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS),
-                               critic_network_generator=partial(create_q_network, state_dim=env.stats.observation_dimension,
-                                                                action_dim=env.stats.action_dimension, layer_size=self.LAYER_SIZE,lstm_size=self.LSTM_SIZE,
+                          critic_network_generator=partial(create_critic_network, state_dim=env.stats.observation_dimension,
+                                                                output_dim=output_dim, layer_size=self.LAYER_SIZE,lstm_size=self.LSTM_SIZE,
                                                                 number_of_big_layers=self.NUMBER_OF_BIG_LAYERS, time_steps=self.TIME_STEPS),
-                               seed=self.SEED,
-                               env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE, alpha=self.ALPHA,
-                               target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, l_alpha=self.L_ALPHA)
+                          seed=self.SEED,
+                          env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE, alpha=self.ALPHA,
+                          target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, l_alpha=self.L_ALPHA)
 
 class PPOConfig(Config):
     EPSILON = 0.2
     GAE_LAMBDA = 0.95
     KLD_THRESHHOLD = 0.05
     STEPS_PER_TRAJECTORIE = 1000
+    ACTOR_OUTPUT_ACTIVATION = "log_softmax"
+
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
             assert key in self.__dir__()
@@ -153,10 +157,10 @@ class PPOConfig(Config):
                                recurrent=self.RECURRENT,
                                run_name=self.name,
                                max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
-                               actor_network_generator=partial(create_log_policy_network, state_dim=env.stats.observation_dimension,
+                               actor_network_generator=partial(create_policy_network, state_dim=env.stats.observation_dimension,output_activation = self.ACTOR_OUTPUT_ACTIVATION,
                                                                number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE, time_steps = self.TIME_STEPS, size_vocabulary = self.SIZE_VOCABULARY, number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS),
-                               critic_network_generator=partial(create_value_network, state_dim=env.stats.observation_dimension,
-                                                                action_dim=env.stats.action_dimension, layer_size=self.LAYER_SIZE,lstm_size=self.LSTM_SIZE,
+                               critic_network_generator=partial(create_critic_network, state_dim=env.stats.observation_dimension,
+                                                                output_dim=self.NUMBER_OF_AGENTS, layer_size=self.LAYER_SIZE,lstm_size=self.LSTM_SIZE,
                                                                 number_of_big_layers=self.NUMBER_OF_BIG_LAYERS, time_steps=self.TIME_STEPS),
                                seed=self.SEED, gae_lambda=self.GAE_LAMBDA,social_influence_sample_size=self.SOCIAL_INFLUENCE_SAMPLE_SIZE,social_reward_weight=self.SOCIAL_REWARD_WEIGHT,
                                env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE, alpha=self.ALPHA,

@@ -6,7 +6,7 @@ from typing import List, Dict, Optional
 import numpy as np
 import tensorflow as tf
 
-from PPO.ExperienceReplayBuffer import PPORecurrentExperienceReplayBuffer
+from PPO.ExperienceReplayBuffer import PPOExperienceReplayBuffer, ADVANTAGE_KEY, PROB_OLD_KEY
 from PPO.PPOagent import PPOAgent
 from SAC.ExperienceReplayBuffer import RecurrentExperienceReplayBuffer
 from SAC.SACagent import SACAgent
@@ -19,6 +19,8 @@ from loss_logger import LossLogger, CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS,
 from domain import ACTIONS
 from plots import plot_multiple
 from timer import Timer, MultiTimer
+from training.ExperienceReplayBuffer import ACTION_KEY, STATE_KEY, REWARD_KEY
+
 
 class PPOTrainer:
 
@@ -28,7 +30,7 @@ class PPOTrainer:
                  batch_size: int, target_entropy,model_path="model/", tau=0.005, reward_scale=1):
         self._loss_logger = LossLogger()
         self._env_batcher = EnvBatcher(env=environment, batch_size=env_parallel)
-        self._replay_buffer = PPORecurrentExperienceReplayBuffer(state_dims=state_dim,action_dims= action_dim, agent_number=len(agent_ids),
+        self._replay_buffer = PPOExperienceReplayBuffer(state_dims=state_dim,action_dims= action_dim, agent_number=len(agent_ids),
                                                               max_size=batch_size*20, batch_size=batch_size, time_steps=environment.stats.recurrency)
         self._agent = PPOAgent(environment_batcher=self._env_batcher, loss_logger=self._loss_logger,seed=seed,
                                replay_buffer=self._replay_buffer, self_play=self_play, agent_ids=agent_ids,
@@ -78,12 +80,12 @@ class PPOTrainer:
             (obs, actions, advantages, rewards, probs_old), render_list, social_rewards = self._agent.sample_trajectories(steps_per_trajectory=self._steps_per_trajectory, render=render)
             if render:
                 ...#self._last_render_as_list.extend(render_list)
-            self._replay_buffer.add_transition_batch(state=obs, action=actions, advantage=advantages, prob_old_policy=probs_old, reward=rewards)
-            for s, a, ret, adv, prob_old_policy in list(self._replay_buffer.get_all_repeated(repetitions=4)):
-                s_concat = tf.concat([s[:,:,index,:] for index in range(self._environment.stats.number_of_agents)],axis=0)
-                a_concat = tf.concat([a[:,index,:] for index in range(self._environment.stats.number_of_agents)],axis=0)
-                probs_old_concat = tf.concat([prob_old_policy[:,index] for index in range(self._environment.stats.number_of_agents)],axis=0)
-                adv_concat = tf.concat([adv[:, index] for index in range(self._environment.stats.number_of_agents)],
+            self._replay_buffer.add_transition_batch({STATE_KEY:obs, ACTION_KEY:actions, ADVANTAGE_KEY:advantages, PROB_OLD_KEY:probs_old, REWARD_KEY:rewards})
+            for batch in list(self._replay_buffer.get_all_repeated(repetitions=4)):
+                s_concat = tf.concat([batch[STATE_KEY][:,:,index,:] for index in range(self._environment.stats.number_of_agents)],axis=0)
+                a_concat = tf.concat([batch[ACTION_KEY][:,index,:] for index in range(self._environment.stats.number_of_agents)],axis=0)
+                probs_old_concat = tf.concat([batch[PROB_OLD_KEY][:,index] for index in range(self._environment.stats.number_of_agents)],axis=0)
+                adv_concat = tf.concat([batch[ADVANTAGE_KEY][:, index] for index in range(self._environment.stats.number_of_agents)],
                                        axis=0)
 
                 if tf.reduce_sum(tf.cast(tf.math.is_nan(s_concat), tf.float32)) > 0:
@@ -93,7 +95,7 @@ class PPOTrainer:
                 self._loss_logger.add_aggregatable_values({ACTOR_LOSS: actor_loss, ENTROPY: entropy,L_ENTROPY:l_entropy, KLD: kld, SOCIAL_REWARD: social_rewards})
                 if early_stopping:
                     break
-                critic_loss, sample_q_value = self._agent.train_step_critic(states=s, ret=ret)
+                critic_loss, sample_q_value = self._agent.train_step_critic(states=batch[STATE_KEY], ret=batch[REWARD_KEY])
                 self._loss_logger.add_aggregatable_values({CRITIC_LOSS: critic_loss, Q_VALUES: sample_q_value})
             self._loss_logger.add_value(identifier=RETURNS, value=tf.reduce_mean(rewards))
             self._loss_logger.add_value(identifier=AVG_ADVANTAGE, value=tf.reduce_mean(advantages))

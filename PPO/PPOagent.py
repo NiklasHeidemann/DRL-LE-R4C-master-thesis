@@ -5,7 +5,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow import math as tfm
 
-from SAC.ExperienceReplayBuffer import ExperienceReplayBuffer
+from SAC.ExperienceReplayBuffer import SACExperienceReplayBuffer
 from domain import ACTIONS
 from environment.env import RenderSave, RenderSaveExtended
 from loss_logger import LossLogger, ALPHA_VALUES
@@ -18,10 +18,10 @@ from timer import MultiTimer
 class PPOAgent:
 
     #todo
-    def __init__(self, environment_batcher, loss_logger: LossLogger, replay_buffer: ExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
+    def __init__(self, environment_batcher, loss_logger: LossLogger, replay_buffer: SACExperienceReplayBuffer, self_play: bool, agent_ids: List[str], action_dim,
                  actor_network_generator, critic_network_generator, recurrent: bool, epsilon: float,
-                 learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float, l_alpha: float,social_reward_weight:float,
-                 batch_size: int , model_path: str, target_entropy: float, seed: int, gae_lamda: float, kld_threshold: float, social_influence_sample_size: int):
+                 learning_rate: float, gamma: float, tau: float, reward_scale: float, alpha: float, l_alpha: float, social_reward_weight:float,
+                 batch_size: int, model_path: str, target_entropy: float, seed: int, gae_lamda: float, kld_threshold: float, social_influence_sample_size: int):
         self._environment_batcher = environment_batcher
         self._loss_logger = loss_logger
         self._self_play = self_play
@@ -147,9 +147,9 @@ class PPOAgent:
             p = tf.math.exp(log_prob_current - prob_old)  # exp() to un do log(p)
             clipped_p = tf.clip_by_value(p, 1 - self._epsilon, 1 + self._epsilon)
             policy_loss = -tfm.reduce_mean(tfm.minimum(p * advantage, clipped_p * advantage))
-            l_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[len(ACTIONS):]*tfm.exp(probability_groups[len(ACTIONS):]),axis=1))
-            r_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[:len(ACTIONS)]*tfm.exp(probability_groups[:len(ACTIONS)]),axis=1))
-            entropy_loss = self._alpha * (l_entropy_loss + r_entropy_loss)
+            l_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[:,len(ACTIONS):]*tfm.exp(probability_groups[:,len(ACTIONS):]),axis=1))
+            r_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[:,:len(ACTIONS)]*tfm.exp(probability_groups[:,:len(ACTIONS)]),axis=1))
+            entropy_loss = self._alpha * r_entropy_loss + self._l_alpha * l_entropy_loss
             loss = policy_loss - entropy_loss
         gradients = tape.gradient(loss, self._actor.trainable_variables)
         self._actor.optimizer.apply_gradients(zip(gradients, self._actor.trainable_variables))
@@ -186,11 +186,20 @@ class PPOAgent:
             additional_com_samples_one_hot = None
         else:
             additional_com_samples = [tf.random.stateless_categorical(logits=log_probs, num_samples=self._social_influence_sample_size, seed=self._generators[generator_index].make_seeds(2)[0]) for log_probs in log_prob_groups[1:]]
-            additional_com_samples_one_hot = tf.concat([tf.one_hot(sample, depth=self._environment_batcher._stats.size_vocabulary+1) for sample in additional_com_samples],axis=2)
+            additional_com_samples_one_hot = None#tf.concat([tf.one_hot(sample, depth=self._environment_batcher._stats.size_vocabulary+1) for sample in additional_com_samples],axis=2)
         one_hot_action_groups = [tf.one_hot(actions, depth=probabilities.shape[-1]) for actions, probabilities in zip(action_groups,log_prob_groups)]
         # check whether probabilitygroups contains nan
         return tf.squeeze(tf.concat(one_hot_action_groups,axis=-1)), tf.concat(log_prob_groups,axis=-1), additional_com_samples_one_hot
 
+    def random_additional_com_samples(self, stats):
+        logits = tf.math.log(tf.ones(shape=(self._environment_batcher.size*self._social_influence_sample_size*stats.number_of_agents*stats.number_communication_channels, stats.size_vocabulary+1))/(stats.size_vocabulary+1))
+        samples = tf.random.stateless_categorical(logits=logits, num_samples=1,
+                                                  seed=self._generators[0].make_seeds(2)[0])
+        one_hot_samples = tf.one_hot(samples, depth=stats.size_vocabulary + 1)
+        reshaped_samples = tf.reshape(one_hot_samples, shape=(
+            self._environment_batcher.size, stats.number_of_agents, self._social_influence_sample_size,
+            stats.number_communication_channels * (stats.size_vocabulary + 1)))
+        return reshaped_samples
 
     def sample_additional_probs(self, states, actor, additional_com_samples, original_action, multitimer: MultiTimer):
         #multitimer.start("repeat_states")
@@ -202,7 +211,7 @@ class PPOAgent:
                 if index_listener == index_influencer:
                     continue
                 #multitimer.start("pos_of_com")
-                pos_of_com = self._environment_batcher._stats.index_of_communication_in_observation(agent_index=index_influencer)
+                pos_of_com = self._environment_batcher._stats.index_of_communication_in_observation(agent_index=index_listener, speaker_index=index_influencer)
                 #multitimer.stop("pos_of_com")
                 #multitimer.start("repeated_states2")
                 repeated_states[:,:,-1,index_listener,pos_of_com:pos_of_com+additional_com_samples.shape[3]] = additional_com_samples[:,index_influencer]
@@ -237,11 +246,17 @@ class PPOAgent:
             multitimer.stop("env_step")
             multitimer.start("sample_additional_probs")
         if include_social:
+            #bb = tf.repeat(tf.expand_dims(batched_actions[:, :, 5:], axis=2), axis=2, repeats=30)
+            #batched_additional_com_samples = tf.stack([bb[:, 1], bb[:, 0]], axis=1)
+            actual_probs = np.moveaxis(np.array([self._actor(observation_prime[:,:,agent_index,:])[0] for agent_index in range(len(self._agent_ids))]),0,1)
+            batched_additional_com_samples = self.random_additional_com_samples(env_batcher._stats)
             mean_prob_alternatives = self.sample_additional_probs(observation_prime, self._actor, batched_additional_com_samples, batched_actions, multitimer=multitimer)
-            social_influence_pairs = np.array([[[(batched_action_probs[index,index_listener,:len(ACTIONS)], mean_prob_alternatives[index,index_influencer,index_listener if index_listener<index_influencer else index_listener -1]) for index_listener in range(len(self._agent_ids))if index_listener!=index_influencer]   for index_influencer in range(len(self._agent_ids)) ] for index in range(self._environment_batcher.size)])
+            social_influence_pairs = np.array([[[(actual_probs[index,index_listener,:len(ACTIONS)], mean_prob_alternatives[index,index_influencer,index_listener if index_listener<index_influencer else index_listener -1]) for index_listener in range(len(self._agent_ids))if index_listener!=index_influencer]   for index_influencer in range(len(self._agent_ids)) ] for index in range(self._environment_batcher.size)])
             exp_social_influence_pairs = np.exp(social_influence_pairs)
             kl_div_ = kl_div(exp_social_influence_pairs[:, :, :, 0], exp_social_influence_pairs[:, :, :, 1])
-            social_reward = np.average(np.sum(kl_div_, axis=3), axis=2)
+            kl_div_normalized = np.log(kl_div_ + 1)
+            kl_div_by_agent = np.sum(kl_div_normalized, axis=2)
+            social_reward = np.sum(kl_div_by_agent, axis=2)
         else:
             social_reward = 0.
         reward += self._social_reward_weight * social_reward
@@ -262,7 +277,7 @@ class PPOAgent:
         actions_one_hot, log_probs, additional_com_samples = self._batched_compute_actions_one_hot_and_log_prob(state, deterministic)
         if state.shape[0]==1:
             actions_one_hot, log_probs = tf.expand_dims(actions_one_hot, axis=1), log_probs
-        return np.moveaxis(np.array(actions_one_hot), 0, 1), np.moveaxis(np.array(log_probs), 0, 1), np.moveaxis(np.array(additional_com_samples), 0, 1)
+        return np.moveaxis(np.array(actions_one_hot), 0, 1), np.moveaxis(np.array(log_probs), 0, 1), additional_com_samples#np.moveaxis(np.array(additional_com_samples), 0, 1)
 
 
     @tf.function
@@ -330,7 +345,7 @@ class PPOAgent:
         with MultiTimer("env_step") as multitimer:
             for _ in range(steps_per_trajectory//self._environment_batcher.size):
                 multitimer.start("act_batched")
-                (action, new_observation, reward, next_done), log_probs, social_reward = self.act_batched(observation, self._environment_batcher, deterministic=False,multitimer=multitimer,include_social=True)
+                (action, new_observation, reward, next_done), log_probs, social_reward = self.act_batched(observation, self._environment_batcher, deterministic=False,multitimer=multitimer,include_social=self._environment_batcher._stats.number_communication_channels>0)
                 multitimer.stop("act_batched")
                 rewards.append(reward)
                 social_rewards.append(social_reward)

@@ -67,7 +67,7 @@ class CoopGridWorld(gymnasium.Env):
         visible_positions = self.stats.visible_positions(self._agent_positions[agent_id])
         grid_observation = np.reshape(newshape=(-1,),a=np.array([self._grid[position] if self._is_valid_position(position) else (np.zeros(shape=(self._stats.values_per_field)) -1) for position in visible_positions]))
         communication_observation = np.concatenate([self._communications[-1][agent_id]]+[communication for com_agent_id, communication in self._communications[-1].items() if com_agent_id!=agent_id])
-        coordinates = np.array([self._agent_positions[agent_id][0]/len(self._grid), self._agent_positions[agent_id][1]/len(self._grid[0])])
+        coordinates = np.array([self._agent_positions[agent_id][0]/len(self._grid), self._agent_positions[agent_id][1]/len(self._grid[0])])*0 #todo
         selected_colour = tf.one_hot(self._agents_locked[agent_id],depth=self.stats.values_per_field) if self._xenia_lock else np.zeros(shape=(self.stats.values_per_field))
         return np.concatenate([grid_observation, communication_observation, self._stats.stats_observation, coordinates, selected_colour])
 
@@ -102,7 +102,7 @@ class CoopGridWorld(gymnasium.Env):
                 self._communications[-1][agent_id] = np.array(actions[index,len(ACTIONS):])
         reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._agents_locked if self._xenia_lock else None)
         is_terminated = max(reward_array)>0
-        is_truncated = self._stats.time_step >= self._stats.max_time_step
+        is_truncated = (not is_terminated) and self._stats.time_step >= self._stats.max_time_step
         self._last_observations.append(self._obs_array)
         self._last_observations.popleft()
         return (

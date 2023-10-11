@@ -40,9 +40,12 @@ class Stats:
             + self.values_per_field # locked color
                 )
 
-    def index_of_communication_in_observation(self, agent_index: int) -> int:
-        return (self.number_of_visible_positions*self.values_per_field
-        + (self.size_vocabulary+1)*self.number_communication_channels*agent_index)
+    def index_of_communication_in_observation(self, agent_index: int, speaker_index: int) -> int:
+        base_position = self.number_of_visible_positions*self.values_per_field
+        if agent_index == speaker_index:
+            return base_position
+        actual_index = speaker_index if agent_index<speaker_index else speaker_index+1
+        return base_position + actual_index * (self.size_vocabulary+1)*self.number_communication_channels
 
     @property
     def action_dimension(self)->int:
