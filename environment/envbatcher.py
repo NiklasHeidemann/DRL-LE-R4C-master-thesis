@@ -1,8 +1,8 @@
-from typing import List
+from typing import List, Optional
+
 import numpy as np
 
 from environment.env import CoopGridWorld
-from environment.stats import Stats
 
 
 class EnvBatcher:
@@ -32,6 +32,11 @@ class EnvBatcher:
 
     def render(self, index: int):
         return self._envs[index].render()
+
+    def get_envs(self, mask: Optional[np.ndarray]= None)->List[CoopGridWorld]:
+        if mask is None:
+            return self._envs
+        return [env for take, env in zip(mask,self._envs) if take]
 
     @property
     def env_types(self)->np.ndarray:

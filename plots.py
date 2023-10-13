@@ -22,6 +22,8 @@ def plot_multiple(run_name: str, values: Mapping[str, Sequence[float]])->None:
     main_fig = make_subplots(rows=size, cols=size, subplot_titles=list(values.keys()))
     counter = 0
     for identifier, returns in values.items():
+        if len(returns) == 0:
+            continue
         fig = plot_returns(run_name=run_name, returns=returns, identifier=identifier)
         main_fig.add_trace(fig, row=counter//size+1, col=counter%size+1)
         main_fig.update_xaxes(title_text="episode", row=counter//size+1, col=counter%size+1)

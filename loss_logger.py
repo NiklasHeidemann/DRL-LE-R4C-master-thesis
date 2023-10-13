@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import List, Any, Optional, Dict
+
 import numpy as np
 
 ACTOR_LOSS = "actor_losses"
@@ -10,10 +11,11 @@ SOCIAL_REWARD = "social_reward"
 LOG_PROBS = "log_probs"
 RETURNS = "returns"
 Q_VALUES = "q_values"
+V_VALUES = "v_values"
 MAX_Q_VALUES = "max_q_values"
 ALPHA_VALUES = "alpha"
 ENTROPY = "entropy"
-L_ENTROPY = "l_entropy"
+COM_ENTROPY = "l_entropy"
 AVG_ADVANTAGE = "avg_advantage"
 STD_ADVANTAGE = "std_advantage"
 N_AGENT_RETURNS = lambda n : f"{n}_agent_returns"

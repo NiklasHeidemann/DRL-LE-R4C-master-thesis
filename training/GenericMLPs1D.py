@@ -1,8 +1,8 @@
 import tensorflow as tf
 import tensorflow.keras as keras
 from keras.layers import LSTM, Reshape
+from tensorflow.keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Dense, Concatenate
 
 from domain import ACTIONS
 

@@ -1,19 +1,18 @@
 import os
 import time
 from pathlib import Path
-from typing import Mapping, Tuple, List, Dict
+from typing import Tuple, List, Dict
 
-import pygame
 import numpy as np
+import pygame
 
-from environment.env import RenderSave, RenderSaveExtended, _map_communication_to_str
-from environment.generator import PositionIndex
-from params import RENDER
-from domain import ACTIONS
+from domain import ACTIONS, RENDER, RenderSave, RenderSaveExtended
+from environment.env import _map_communication_to_str
 
 if RENDER:
     window = pygame.display.set_mode((1000, 500))
     pygame.font.init()
+
 def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index: int, max_q_value: Dict[str, Tuple[float,float]], log_dir: str):
     grid, agent_positions, last_agent_movements, last_communication, timestep, agents_locked = save
     global window

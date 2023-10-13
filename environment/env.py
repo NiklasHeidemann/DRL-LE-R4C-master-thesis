@@ -2,35 +2,18 @@ import random
 from collections import deque
 from typing import List, Tuple, Dict, Optional
 
-import gym as gym
 import gymnasium
-import tensorflow as tf
 import numpy as np
-from domain import AgentID
+import tensorflow as tf
 
-from environment.generator import WorldGenerator, PositionIndex
+from domain import ACTIONS, ENV_TYPE, PositionIndex
+from domain import AgentID, RenderSave
+from environment.generator import WorldGenerator
 from environment.reward import ComputeReward
 from environment.stats import Stats
-from domain import ACTIONS, ENV_TYPE
-
-RenderSave = Tuple[np.ndarray, Dict[AgentID, PositionIndex], Dict[AgentID, str], Dict[AgentID, np.ndarray], int, Dict[AgentID, int]]
-RenderSaveExtended = Tuple[RenderSave, np.ndarray, Dict[AgentID, Tuple[float,float]]]
 
 DEFAULT_COMMUNCIATIONS = lambda size_vocabulary, number_communication_channels: np.concatenate([[1.]+[0.]*size_vocabulary]*number_communication_channels) if number_communication_channels > 0 else []
 
-def _map_communication_to_str(communication: np.ndarray) -> str:
-    chars = []
-    size_vocabulary = int(len(communication)/sum(communication))
-    assert int(size_vocabulary) == size_vocabulary
-    for index in range(0, len(communication), int(size_vocabulary)):
-        token = communication[index:index + size_vocabulary]
-        index = communication.argmax()
-        assert sum(token) == 1, f"{token}, {communication}"
-        if index == 0:
-            chars.append('-')
-        else:
-            chars.append(chr(ord("a") + index - 1))
-    return ''.join(chars)
 
 
 class CoopGridWorld(gymnasium.Env):
@@ -136,8 +119,6 @@ class CoopGridWorld(gymnasium.Env):
     def render(self) -> RenderSave:
         grid = '\n'+'\n'.join([''.join([self._map_cell_to_char(pos=(x,y)) for y in range(self._grid.shape[1])]) for x in range(self._grid.shape[0])])
         communication = '\t'.join([f"{agent_id}: '{_map_communication_to_str(communication=com) if len(com)>0 else ''}'" for agent_id, com in self._communications[-1].items()])
-        output = grid + '\n' + communication
-        #print(output)
         render_save = self._grid.copy(), self._agent_positions.copy(), self._last_agent_actions[-1], self._communications[-1], self.stats.time_step, self._agents_locked.copy()
         return render_save
     def state(self) -> np.ndarray:
@@ -175,3 +156,17 @@ class CoopGridWorld(gymnasium.Env):
     @property
     def current_type(self)->ENV_TYPE:
         return self._stats.placed_agents
+
+def _map_communication_to_str(communication: np.ndarray) -> str:
+    chars = []
+    size_vocabulary = int(len(communication)/sum(communication))
+    assert int(size_vocabulary) == size_vocabulary
+    for index in range(0, len(communication), int(size_vocabulary)):
+        token = communication[index:index + size_vocabulary]
+        index = communication.argmax()
+        assert sum(token) == 1, f"{token}, {communication}"
+        if index == 0:
+            chars.append('-')
+        else:
+            chars.append(chr(ord("a") + index - 1))
+    return ''.join(chars)

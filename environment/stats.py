@@ -25,7 +25,6 @@ class Stats:
 
     @property
     def stats_observation(self)->np.ndarray:
-        #return np.array([self.grid_size, self.number_of_agents, self.number_of_objects, self.number_of_used_colors, self.time_step])
         return np.array([self.max_time_step/30, self.time_step/self.max_time_step, self.number_of_used_colors/self.size_vocabulary])
 
     @property
@@ -40,6 +39,10 @@ class Stats:
             + self.values_per_field # locked color
                 )
 
+    """
+    returns the index in the observation of agent_index that corresponds to the beginning of the communication of 
+    agent speaker_index 
+    """
     def index_of_communication_in_observation(self, agent_index: int, speaker_index: int) -> int:
         base_position = self.number_of_visible_positions*self.values_per_field
         if agent_index == speaker_index:

@@ -1,11 +1,8 @@
-import multiprocessing
-from typing import Dict, Optional, Union, Tuple
+from typing import Optional
 
-import tensorflow as tf
 import numpy as np
-from typing_extensions import override
 
-from training.ExperienceReplayBuffer import ExperienceReplayBuffer, ACTION_KEY, REWARD_KEY, STATE_KEY
+from training.ExperienceReplayBuffer import ExperienceReplayBuffer
 
 ADVANTAGE_KEY = "advantage"
 PROB_OLD_KEY = "prob_old"
