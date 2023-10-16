@@ -8,6 +8,17 @@ class ActionSampler:
         self._generators = generators
         self._actor_uses_log_probs = actor_uses_log_probs
 
+    def compute_actions_one_hot_and_prob(self, state, deterministic):
+        actions_one_hot, action_log_probs, actions_probs = list(
+            zip(*[self.sample_actions(deterministic=deterministic, generator_index=index,
+                                      states=tf.expand_dims(
+                                          tf.convert_to_tensor(state[:, index, :]), axis=0),
+                                      actor=self._actor) for index in range(len(self._agent_ids))]))
+        if self._actor_uses_log_probs:
+            return np.array(actions_one_hot), np.squeeze(np.array(action_log_probs))
+        else:
+            return np.array(actions_one_hot), np.squeeze(np.array(actions_probs))
+
     def batched_compute_actions_one_hot_and_probs_or_log_probs(self, state, deterministic):
             actions_one_hot, probs_or_log_probs = self._batched_compute_actions_one_hot_and_probs_or_log_probs(state, deterministic)
             if state.shape[0] == 1:
@@ -40,3 +51,4 @@ class ActionSampler:
         one_hot_action_groups = [tf.one_hot(actions, depth=probabilities.shape[-1]) for actions, probabilities in zip(action_groups,log_prob_groups)]
         probability_groups = None if self._actor_uses_log_probs else  tf.concat(output_groups,axis=-1)
         return tf.squeeze(tf.concat(one_hot_action_groups,axis=-1)), tf.concat(log_prob_groups,axis=-1), probability_groups
+

@@ -16,27 +16,38 @@ from training.SAC.SACTrainer import SACTrainer
 from training.Trainer import Trainer
 
 
+"""
+Class to ease experiments with multiple configurations. A standard configuration is set by the constants below.
+Name and visible_positions are the only parameters that always have to be specified.
+For the different algorithms there are different subclasses of this class with constructors suitable for changing
+the config.
+"""
 class Config(Protocol):
     name: str = None
     VISIBLE_POSITIONS: Callable = None
-    # network
-    BATCH_SIZE = 64
-    LAYER_SIZE = 32
+
+    # Agent.py
+    COM_ALPHA = 0.01
+    MOV_ALPHA = 0.2
+    GAMMA = 0.99
+    TAU = 0.005
     LEARNING_RATE = 0.0001
-    LSTM_SIZE = 32
-    NUMBER_OF_BIG_LAYERS = 2
     RECURRENT = True
     SELF_PLAY = True
-    TIME_STEPS = 10
-    ALPHA = 0.2
-    L_ALPHA = 0.01
-    TAU = 0.005
-    GAMMA = 0.99
-    TARGET_ENTROPY = 1.
 
-    # socialinfluence
     SOCIAL_INFLUENCE_SAMPLE_SIZE = 30
     SOCIAL_REWARD_WEIGHT = 0
+
+    # ExperienceReplayBuffer.py
+    BATCH_SIZE = 64
+    TIME_STEPS = 10
+
+    # GenericMLPs1D.py
+    LAYER_SIZE = 32
+    LSTM_SIZE = 32
+    NUMBER_OF_BIG_LAYERS = 2
+
+    # socialinfluence
 
     # environment
     WORLD_GENERATOR = "random"  # multi or random or choice
@@ -64,7 +75,7 @@ class Config(Protocol):
     EPOCHS = 200000
     SEED = 15
     ENV_PARALLEL = 32
-    FROM_SAVE = True
+    FROM_SAVE = False
 
     def __call__(self, catched=True):
         if not catched:
@@ -99,6 +110,7 @@ class Config(Protocol):
         selected_world_generator = multi_world_generator if self.WORLD_GENERATOR == "multi" else (
             random_world_generator if self.WORLD_GENERATOR == "random" else (
                 choice_world_generator if self.WORLD_GENERATOR == "choice" else None))
+
         env = CoopGridWorld(generator=selected_world_generator, compute_reward=self.compute_reward,
                             xenia_lock=self.XENIA_LOCK, xenia_permanence=self.XENIA_PERMANENCE)
         self.env = env
@@ -107,54 +119,72 @@ class Config(Protocol):
         env.stats.visible_positions = self.VISIBLE_POSITIONS
         env.stats.recurrency = self.TIME_STEPS
         env.reset()
-        self.trainer = self.get_trainer(env=env)
+
+        policy_network = partial(create_policy_network, state_dim=env.stats.observation_dimension,
+                output_activation=self.actor_output_activation,
+                number_of_big_layers=self.NUMBER_OF_BIG_LAYERS, recurrent=self.RECURRENT,
+                layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE,
+                time_steps=self.TIME_STEPS, learning_rate=self.LEARNING_RATE,
+                size_vocabulary=self.SIZE_VOCABULARY,
+                number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS)
+        value_network = partial(create_critic_network,
+                                state_dim=env.stats.observation_dimension,recurrent=self.RECURRENT,
+                                output_dim=self.critic_output_dim(env=env), layer_size=self.LAYER_SIZE,
+                                lstm_size=self.LSTM_SIZE, learning_rate=self.LEARNING_RATE,
+                                number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,
+                                time_steps=self.TIME_STEPS, agent_num=self.NUMBER_OF_AGENTS)
+
+        self.trainer = self.get_trainer(env=env, policy_network=policy_network, value_network=value_network)
         self.trainer.train(render=RENDER, epochs=self.EPOCHS)
 
     @abstractmethod
-    def get_trainer(self, env) -> Trainer:
+    def get_trainer(self, env: CoopGridWorld, policy_network, value_network) -> Trainer:
         ...
 
+    @property
+    @abstractmethod
+    def actor_output_activation(self)->str:
+        ...
+
+    @abstractmethod
+    def critic_output_dim(self, env: CoopGridWorld)->int:
+        ...
 
 class SACConfig(Config):
     ACTOR_OUTPUT_ACTIVATION = "softmax"
     ENVIRONMENT_STEPS_PER_EPOCH = 500
     BATCHES_PER_EPOCH = 8
     PRE_SAMPLING_STEPS = 1000
+    TARGET_ENTROPY = 1.
 
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
             assert key in self.__dir__()
             setattr(self, key, value)
 
-    def get_trainer(self, env):
-        output_dim = env.stats.action_dimension * self.NUMBER_OF_AGENTS
+    def get_trainer(self, env: CoopGridWorld, policiy_network, value_network):
         return SACTrainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY,
                           agent_ids=env.stats.agent_ids,
                           state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
-                          recurrent=self.RECURRENT,
                           run_name=self.name,
                           max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
-                          actor_network_generator=partial(create_policy_network,
-                                                          state_dim=env.stats.observation_dimension,
-                                                          output_activation=self.ACTOR_OUTPUT_ACTIVATION,
-                                                          number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,
-                                                          layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE,
-                                                          time_steps=self.TIME_STEPS,
-                                                          size_vocabulary=self.SIZE_VOCABULARY,
-                                                          number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS),
-                          critic_network_generator=partial(create_critic_network,
-                                                           state_dim=env.stats.observation_dimension,
-                                                           output_dim=output_dim, layer_size=self.LAYER_SIZE,
-                                                           lstm_size=self.LSTM_SIZE,
-                                                           number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,
-                                                           time_steps=self.TIME_STEPS),
+                          social_reward_weight=self.SOCIAL_REWARD_WEIGHT,
+                          social_influence_sample_size=self.SOCIAL_INFLUENCE_SAMPLE_SIZE,
+                          actor_network_generator=policiy_network,
+                          critic_network_generator=value_network,
                           seed=self.SEED,
-                          env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE,
-                          alpha=self.ALPHA,
-                          target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, com_alpha=self.L_ALPHA,
+                          env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE,
+                          alpha=self.MOV_ALPHA,
+                          target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, com_alpha=self.COM_ALPHA,
                           batches_per_epoch=self.BATCHES_PER_EPOCH, pre_sampling_steps=self.PRE_SAMPLING_STEPS,
                           environment_steps_per_epoch=self.ENVIRONMENT_STEPS_PER_EPOCH, tau=self.TAU)
 
+    @property
+    def actor_output_activation(self) -> str:
+        return self.ACTOR_OUTPUT_ACTIVATION
+
+    def critic_output_dim(self, env: CoopGridWorld)->int:
+        return env.stats.action_dimension * self.NUMBER_OF_AGENTS
 
 class PPOConfig(Config):
     EPSILON = 0.2
@@ -168,31 +198,24 @@ class PPOConfig(Config):
             assert key in self.__dir__()
             setattr(self, key, value)
 
-    def get_trainer(self, env):
+    def get_trainer(self, env: CoopGridWorld, policy_network, value_network):
         return PPOTrainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY,
                           agent_ids=env.stats.agent_ids,
                           state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
-                          recurrent=self.RECURRENT,
                           run_name=self.name,
-                          actor_network_generator=partial(create_policy_network,
-                                                          state_dim=env.stats.observation_dimension,
-                                                          output_activation=self.ACTOR_OUTPUT_ACTIVATION,
-                                                          number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,
-                                                          layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE,
-                                                          time_steps=self.TIME_STEPS,
-                                                          size_vocabulary=self.SIZE_VOCABULARY,
-                                                          number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS),
-                          critic_network_generator=partial(create_critic_network,
-                                                           state_dim=env.stats.observation_dimension,
-                                                           output_dim=self.NUMBER_OF_AGENTS, layer_size=self.LAYER_SIZE,
-                                                           lstm_size=self.LSTM_SIZE,
-                                                           number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,
-                                                           time_steps=self.TIME_STEPS),
+                          actor_network_generator=policy_network,
+                          critic_network_generator=value_network,
                           seed=self.SEED, gae_lambda=self.GAE_LAMBDA,
                           social_influence_sample_size=self.SOCIAL_INFLUENCE_SAMPLE_SIZE,
                           social_reward_weight=self.SOCIAL_REWARD_WEIGHT,
-                          env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE, learning_rate=self.LEARNING_RATE,
-                          alpha=self.ALPHA,
-                          gamma=self.GAMMA, com_alpha=self.L_ALPHA, epsilon=self.EPSILON,
+                          env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE,
+                          alpha=self.MOV_ALPHA,
+                          gamma=self.GAMMA, com_alpha=self.COM_ALPHA, epsilon=self.EPSILON,
                           steps_per_trajectory=self.STEPS_PER_TRAJECTORIE, kld_threshold=self.KLD_THRESHHOLD,
                           tau=self.TAU)
+    @property
+    def actor_output_activation(self) -> str:
+        return self.ACTOR_OUTPUT_ACTIVATION
+
+    def critic_output_dim(self, env: CoopGridWorld)->int:
+        return self.NUMBER_OF_AGENTS

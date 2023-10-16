@@ -48,19 +48,19 @@ class Trainer(Protocol):
         self._last_render_as_list.clear()
         for index in range(n_samples):
             observation_array, _ = self._environment.reset()
-            action_probs = defaultdict(lambda: np.zeros(shape=(len(ACTIONS))))
+            action_probs_or_log_probs = defaultdict(lambda: np.zeros(shape=(len(ACTIONS))))
             return_ = 0
             while True:
                 if render:
-                    render_save.append(self._get_current_render_save(observation_array=observation_array, action_probs=action_probs))
-                (actions_array, new_observation_array, reward_array, done), action_probs = self._agent.act(
+                    render_save.append(self._get_current_render_save(observation_array=observation_array, action_probs=action_probs_or_log_probs))
+                (actions_array, new_observation_array, reward_array, done), action_probs_or_log_probs = self._agent.act(
                     observation_array, deterministic=True, env=self._environment)
                 return_ += sum(reward_array)
                 if done:
                     returns.append(return_)
                     if render:
                         render_save.append(self._get_current_render_save(observation_array=observation_array,
-                                                                         action_probs=action_probs))
+                                                                         action_probs=action_probs_or_log_probs))
                         self._last_render_as_list.append(render_save)
                         render_save = []
                     print(

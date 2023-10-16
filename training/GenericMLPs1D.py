@@ -26,7 +26,7 @@ def create_policy_network(learning_rate, state_dim, layer_size:int, lstm_size: i
 
 
 
-def create_critic_network(learning_rate, state_dim, output_dim, layer_size:int, lstm_size: int, time_steps: int, agent_num: int, number_of_big_layers: int = 3, recurrent: bool=False):
+def create_critic_network(learning_rate, state_dim, output_dim, layer_size:int, lstm_size: int, time_steps: int, agent_num: int, number_of_big_layers: int, recurrent: bool):
     inputs = keras.Input(shape=(time_steps, state_dim * agent_num))
     x = inputs
     if recurrent:

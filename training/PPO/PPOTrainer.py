@@ -20,9 +20,9 @@ from training.Trainer import Trainer
 class PPOTrainer(Trainer):
 
     def __init__(self, environment, self_play: bool, agent_ids: List[str], state_dim, action_dim, from_save: bool,
-                 actor_network_generator, critic_network_generator, recurrent: bool, gae_lambda: float,
+                 actor_network_generator, critic_network_generator, gae_lambda: float,
                  social_influence_sample_size: int, social_reward_weight: float, tau: float,
-                 learning_rate, gamma, alpha, com_alpha: float, env_parallel: int, seed: int, run_name: str,
+                 gamma: float, alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
                  epsilon: float, steps_per_trajectory: int, kld_threshold: float,
                  batch_size: int, model_path="model/"):
         self._env_batcher = EnvBatcher(env=environment, batch_size=env_parallel)
@@ -31,14 +31,13 @@ class PPOTrainer(Trainer):
                                                         max_size=batch_size * 20, batch_size=batch_size,
                                                         time_steps=environment.stats.recurrency)
         agent = PPOAgent(environment_batcher=self._env_batcher, seed=seed,
-                               self_play=self_play, agent_ids=agent_ids,
-                               actor_network_generator=actor_network_generator,
-                               gae_lamda=gae_lambda, social_reward_weight=social_reward_weight,
-                               critic_network_generator=critic_network_generator, recurrent=recurrent,
-                               learning_rate=learning_rate, gamma=gamma, tau=tau,
-                               social_influence_sample_size=social_influence_sample_size,
-                               alpha=alpha, com_alpha=com_alpha, model_path=model_path,
-                               epsilon=epsilon, kld_threshold=kld_threshold)
+                         self_play=self_play, agent_ids=agent_ids,
+                         actor_network_generator=actor_network_generator,
+                         gae_lamda=gae_lambda, social_reward_weight=social_reward_weight,
+                         critic_network_generator=critic_network_generator, gamma=gamma, tau=tau,
+                         social_influence_sample_size=social_influence_sample_size,
+                         alpha=alpha, com_alpha=com_alpha, model_path=model_path,
+                         epsilon=epsilon, kld_threshold=kld_threshold)
         metrics =        {
             10: [CRITIC_LOSS, ACTOR_LOSS, V_VALUES, KLD, AVG_ADVANTAGE, STD_ADVANTAGE],
         3: [ENTROPY, COM_ENTROPY, TEST_RETURNS],
