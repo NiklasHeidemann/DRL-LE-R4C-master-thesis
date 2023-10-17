@@ -30,7 +30,7 @@ def plot_multiple(run_name: str, values: Mapping[str, Sequence[float]])->None:
         main_fig.update_yaxes(title_text=f"Smoothed {identifier}", row=counter//size+1, col=counter%size+1)
         counter += 1
     main_fig.update_layout(title_text=f"All smoothed values after {max([len(list_) for list_ in values.values()])} episodes", height=300*size, width=400*size, showlegend=False)
-    main_fig.write_image(f"plots/{run_name}_all.png")
+    main_fig.write_image(f"plots/__{run_name}_all.png")
     print("plotting thread end")
 def delete_old_plots():
     for path in os.listdir("."):

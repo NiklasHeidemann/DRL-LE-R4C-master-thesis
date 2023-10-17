@@ -28,7 +28,7 @@ class Config(Protocol):
 
     # Agent.py
     COM_ALPHA = 0.01
-    MOV_ALPHA = 0.2
+    MOV_ALPHA = 0.15
     GAMMA = 0.99
     TAU = 0.005
     LEARNING_RATE = 0.0001
@@ -51,9 +51,9 @@ class Config(Protocol):
 
     # environment
     WORLD_GENERATOR = "random"  # multi or random or choice
-    GRID_SIZE_RANGE = (4, 16)
+    GRID_SIZE_RANGE = (12, 16)
     MAX_TIME_STEP = 30
-    NUMBER_OF_AGENTS = 3
+    NUMBER_OF_AGENTS = 3 if not WORLD_GENERATOR == "choice" else 2
     COMMUNISM = False
     AGENT_DROPOUT_PROBS = 0  # 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
     NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6)
@@ -72,8 +72,8 @@ class Config(Protocol):
     MAX_REPLAY_BUFFER_SIZE = 10000
 
     # training
-    EPOCHS = 200000
-    SEED = 15
+    EPOCHS = 1000
+    SEED = 16
     ENV_PARALLEL = 32
     FROM_SAVE = False
 
