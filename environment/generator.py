@@ -162,7 +162,7 @@ class ChoiceWorldGenerator(WorldGenerator):
     _grid_size: int = 10
     _number_of_objects_to_place_per_agent: int = 4
     _number_of_agents: int = 2
-    _max_time_step: int = 3
+    _max_time_step: int = 6
     _number_of_object_colors: int
 
     """

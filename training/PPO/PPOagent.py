@@ -2,13 +2,11 @@ from typing import List, Tuple, Dict
 
 import numpy as np
 import tensorflow as tf
-from scipy.special import kl_div
 from tensorflow import math as tfm
 from typing_extensions import override
 
 from domain import ACTIONS, RenderSaveExtended
-from loss_logger import ACTOR_LOSS, KLD, COM_ENTROPY, ENTROPY, CRITIC_LOSS, V_VALUES
-from timer import MultiTimer
+from utils.loss_logger import ACTOR_LOSS, KLD, COM_ENTROPY, ENTROPY, CRITIC_LOSS, V_VALUES
 from training.Agent import Agent, EarlyStopping
 from training.ExperienceReplayBuffer import STATE_KEY, REWARD_KEY, ACTION_KEY
 from training.PPO.ExperienceReplayBuffer import ADVANTAGE_KEY, PROB_OLD_KEY
@@ -18,7 +16,7 @@ class PPOAgent(Agent):
 
 
     #todo
-    def __init__(self, environment_batcher, self_play: bool, agent_ids: List[str], actor_network_generator, critic_network_generator,
+    def __init__(self, environment_batcher, agent_ids: List[str], actor_network_generator, critic_network_generator,
                  epsilon: float,
                  gamma: float, tau: float, alpha: float, com_alpha: float, social_reward_weight:float,
                  model_path: str, seed: int, gae_lamda: float, kld_threshold: float, social_influence_sample_size: int):
@@ -27,7 +25,7 @@ class PPOAgent(Agent):
         self._kld_threshold = kld_threshold
         self._gae_lamda = gae_lamda
         self._epsilon = epsilon
-        self._init(self_play=self_play, agent_ids=agent_ids, actor_network_generator=actor_network_generator, actor_uses_log_probs=True,
+        self._init(agent_ids=agent_ids, actor_network_generator=actor_network_generator, actor_uses_log_probs=True,
                    critic_network_generator=critic_network_generator, gamma=gamma, tau=tau, mov_alpha=alpha, com_alpha=com_alpha,
                    model_path=model_path, seed=seed, social_influence_sample_size=social_influence_sample_size, social_reward_weight=social_reward_weight)
 

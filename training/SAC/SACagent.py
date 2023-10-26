@@ -7,7 +7,7 @@ from typing_extensions import override
 
 from domain import ACTIONS
 from environment.envbatcher import EnvBatcher
-from loss_logger import LOG_PROBS, CRITIC_LOSS, ENTROPY, COM_ENTROPY, Q_VALUES, ACTOR_LOSS, \
+from utils.loss_logger import LOG_PROBS, CRITIC_LOSS, ENTROPY, COM_ENTROPY, Q_VALUES, ACTOR_LOSS, \
     MAX_Q_VALUES
 from training.Agent import Agent, EarlyStopping
 from training.ExperienceReplayBuffer import STATE_KEY, ACTION_KEY, REWARD_KEY
@@ -16,19 +16,19 @@ from training.SAC.ExperienceReplayBuffer import DONE_KEY, STATE_PRIME_KEY
 
 class SACAgent(Agent):
 
-    def __init__(self, environment, self_play: bool, agent_ids: List[str], actor_network_generator,
+    def __init__(self, environment, agent_ids: List[str], actor_network_generator,
                  critic_network_generator, env_batcher: EnvBatcher,
-                 learning_rate: float, gamma: float, tau: float, alpha: float, com_alpha: float,
+                 gamma: float, tau: float, mov_alpha: float, com_alpha: float,
                  social_influence_sample_size: int,
                  batch_size: int, model_path: str, target_entropy: float, seed: int, social_reward_weight: float):
         self._environment = environment
         self._environment_batcher_ = env_batcher
         self._batch_size = batch_size
         self._target_entropy = target_entropy
-        self._init(self_play=self_play, agent_ids=agent_ids, actor_network_generator=actor_network_generator,
+        self._init(agent_ids=agent_ids, actor_network_generator=actor_network_generator,
                    actor_uses_log_probs=False, social_reward_weight=social_reward_weight, social_influence_sample_size=social_influence_sample_size,
-                   critic_network_generator=critic_network_generator, learning_rate=learning_rate,
-                   gamma=gamma, tau=tau, mov_alpha=alpha, com_alpha=com_alpha, model_path=model_path, seed=seed)
+                   critic_network_generator=critic_network_generator,
+                   gamma=gamma, tau=tau, mov_alpha=mov_alpha, com_alpha=com_alpha, model_path=model_path, seed=seed)
 
     def _get_max_q_value(self, states):
         reshaped_states = tf.reshape(np.array(states), shape=(
@@ -46,13 +46,14 @@ class SACAgent(Agent):
     def train_step_critic(self, inputs: Dict[str, tf.Tensor]) -> Dict[str, float]:
         states, actions, rewards, states_prime, dones = inputs[STATE_KEY], inputs[ACTION_KEY], inputs[REWARD_KEY], \
             inputs[STATE_PRIME_KEY], inputs[DONE_KEY]
-        _, log_probs, action_probs = self._action_sampler.sample_actions(tf.reshape(states_prime,
+        _, log_probs, action_probs = self._action_sampler(tf.reshape(states_prime,
                                                                     shape=(
                                                                         self._batch_size * len(
                                                                             self._agent_ids),
                                                                         self._environment.stats.recurrency,
                                                                         self._environment.stats.observation_dimension)),
-                                                         actor=self._actor)
+                                                         generator_index=0)
+        # [self._action_sampler(states=states_prime[:,index,:,:],                                                         actor=self._actors[index],generator_index=index) for index in range(len(self._actors))]
         flattened_states_prime = tf.reshape(states_prime, shape=self.agent_flattened_shape)
         flattened_states = tf.reshape(states, shape=self.agent_flattened_shape)
         q1 = tf.reshape(self._critic_1_t(flattened_states_prime), shape=action_probs.shape)
@@ -87,29 +88,41 @@ class SACAgent(Agent):
     def train_step_actor(self, batch: Dict[str, tf.Tensor]) -> Tuple[EarlyStopping, Dict[str, float]]:
         states = batch[STATE_KEY]
         reshaped_states = tf.reshape(states, shape=self.agent_flattened_shape)
-        if self._self_play:
-            actor = self._actor
+        with tf.GradientTape() as tape:
+            _, log_probs, action_probs = self._action_sampler(
+                states=tf.reshape(states, shape=(
+                    self._batch_size * len(self._agent_ids), self._environment.stats.recurrency,
+                    self._environment.stats.observation_dimension)),
+                generator_index=0)
+            q = tf.reshape(tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)),
+                           shape=action_probs.shape)
+            entropy_part = tf.concat(
+                [self._mov_alpha * log_probs[:, :len(ACTIONS)], self._com_alpha * log_probs[:, len(ACTIONS):]], axis=1)
+            sum_part = tfm.reduce_sum(action_probs * (entropy_part - q), axis=1)
+            loss = tfm.reduce_mean(sum_part)
+        gradients = tape.gradient(loss, self._actor.trainable_variables)
+        self._actor.optimizer.apply_gradients(zip(gradients, self._actor.trainable_variables))
+        metrics = {ACTOR_LOSS: loss, Q_VALUES: tf.reduce_mean(q),
+                   MAX_Q_VALUES: tf.reduce_mean(tf.reduce_max(q, axis=1))}
+        return False, metrics
+
+    @tf.function
+    def train_step_single_actor(self, index: int,agent_states:tf.Tensor,q:tf.Tensor)->Dict[str,float]:
             with tf.GradientTape() as tape:
-                _, log_probs, action_probs = self._action_sampler.sample_actions(
-                    states=tf.reshape(states, shape=(
-                        self._batch_size * len(self._agent_ids), self._environment.stats.recurrency,
+                _, log_probs, action_probs = self._action_sampler(
+                    states=tf.reshape(agent_states, shape=(
+                        self._batch_size, self._environment.stats.recurrency,
                         self._environment.stats.observation_dimension)),
-                    actor=actor)
-                q = tf.reshape(tfm.minimum(self._critic_1(reshaped_states), self._critic_2(reshaped_states)),
-                               shape=action_probs.shape)
+                generator_index=index)
                 entropy_part = tf.concat(
                     [self._mov_alpha * log_probs[:, :len(ACTIONS)], self._com_alpha * log_probs[:, len(ACTIONS):]], axis=1)
                 sum_part = tfm.reduce_sum(action_probs * (entropy_part - q), axis=1)
                 loss = tfm.reduce_mean(sum_part)
-            gradients = tape.gradient(loss, actor.trainable_variables)
-            actor.optimizer.apply_gradients(zip(gradients, actor.trainable_variables))
+            gradients = tape.gradient(loss, self._actor.trainable_variables)
+            self._actor.optimizer.apply_gradients(zip(gradients, self._actor.trainable_variables))
             metrics = {ACTOR_LOSS: loss, Q_VALUES: tf.reduce_mean(q),
                        MAX_Q_VALUES: tf.reduce_mean(tf.reduce_max(q, axis=1))}
-            return False, metrics
-        else:
-            raise NotImplementedError()
-
-
+            return metrics
 
     def train_step_temperature(self, states):
         action_probs = self._actor(tf.reshape(states, shape=(

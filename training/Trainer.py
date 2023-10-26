@@ -9,8 +9,8 @@ from typing_extensions import Protocol
 
 from domain import ACTIONS, RenderSaveExtended
 from language.predictGoal import TrainPredictGoal
-from loss_logger import TEST_RETURNS, LossLogger
-from plots import plot_multiple
+from utils.loss_logger import TEST_RETURNS, LossLogger, TEST_SOCIAL_RETURNS
+from plotting.plots import plot_multiple
 from training.Agent import Agent
 from training.ExperienceReplayBuffer import ExperienceReplayBuffer
 
@@ -26,9 +26,10 @@ class Trainer(Protocol):
         self._run_name = run_name
         self._train_predict_goal = TrainPredictGoal(environment=environment)
         if from_save:
-            self._agent.load_models(name="", run_name=run_name)
+            self.epoch = self._agent.load_models(name="", run_name=run_name)
             self._loss_logger.load(path="logger")
         else:
+            self.epoch = 0
             for smooth_factor, metric_names in metrics.items():
                 self._loss_logger.add_lists(metric_names, smoothed=smooth_factor)
 
@@ -39,25 +40,29 @@ class Trainer(Protocol):
         return ((self._environment.render(), action_probs, values_by_agent))
 
     @abstractmethod
-    def train(self, epochs: int, render: bool)->None:
+    def train(self, num_epochs: int, render: bool)->None:
         ...
 
-    def test(self, n_samples: int, render: bool)->float:
+    def test(self, n_samples: int, render: bool)->(float, float):
         returns = []
+        social_returns = []
         render_save: List[RenderSaveExtended] = []
         self._last_render_as_list.clear()
         for index in range(n_samples):
             observation_array, _ = self._environment.reset()
             action_probs_or_log_probs = defaultdict(lambda: np.zeros(shape=(len(ACTIONS))))
             return_ = 0
+            social_reward = 0
             while True:
                 if render:
                     render_save.append(self._get_current_render_save(observation_array=observation_array, action_probs=action_probs_or_log_probs))
                 (actions_array, new_observation_array, reward_array, done), action_probs_or_log_probs = self._agent.act(
                     observation_array, deterministic=True, env=self._environment)
                 return_ += sum(reward_array)
+                social_reward += sum(self._agent.compute_social_reward(observation_prime=np.expand_dims(new_observation_array,axis=0),deterministic=True))
                 if done:
                     returns.append(return_)
+                    social_returns.append(social_reward)
                     if render:
                         render_save.append(self._get_current_render_save(observation_array=observation_array,
                                                                          action_probs=action_probs_or_log_probs))
@@ -68,12 +73,14 @@ class Trainer(Protocol):
                     break
                 observation_array = new_observation_array
         avg_return = np.mean(returns)
+        avg_social_return = np.mean(social_returns)
         print(f"TEST: The average return is {avg_return}")
-        return avg_return
+        return avg_return, avg_social_return
 
     def _every_few_epochs(self, render:bool):
-        self._agent.save_models(name="", run_name=self._run_name)
-        self._loss_logger.add_value(identifier=TEST_RETURNS, value=self.test(n_samples=10, render=render))
+        self._agent.save_models(name="", run_name=self._run_name, current_epoch=self.epoch)
+        return_, social_return = self.test(n_samples=10, render=render)
+        self._loss_logger.add_values({TEST_RETURNS: return_, TEST_SOCIAL_RETURNS   : social_return})
         self._loss_logger.save(path="logger")
         thread = Thread(target=plot_multiple, args=[self._run_name, self._loss_logger.all_smoothed()])
         thread.start()

@@ -1,19 +1,22 @@
+from typing import Union, Dict, List
+
 import numpy as np
 import tensorflow as tf
 class ActionSampler:
     
-    def __init__(self, actor_uses_log_probs: bool, generators, actor, agent_ids):
+    def __init__(self, actor_uses_log_probs: bool, generators, actor: tf.keras.Model):
         self._actor = actor
-        self._agent_ids = agent_ids
         self._generators = generators
         self._actor_uses_log_probs = actor_uses_log_probs
 
+
+
     def compute_actions_one_hot_and_prob(self, state, deterministic):
         actions_one_hot, action_log_probs, actions_probs = list(
-            zip(*[self.sample_actions(deterministic=deterministic, generator_index=index,
+            zip(*[self(deterministic=deterministic, generator_index=index,
                                       states=tf.expand_dims(
                                           tf.convert_to_tensor(state[:, index, :]), axis=0),
-                                      actor=self._actor) for index in range(len(self._agent_ids))]))
+                                      ) for index in range(state.shape[1])]))
         if self._actor_uses_log_probs:
             return np.array(actions_one_hot), np.squeeze(np.array(action_log_probs))
         else:
@@ -28,22 +31,26 @@ class ActionSampler:
     @tf.function
     def _batched_compute_actions_one_hot_and_probs_or_log_probs(self, state, deterministic):
             actions_one_hot, log_probs, probs = list(
-                zip(*[self.sample_actions(deterministic=deterministic, generator_index=index,
+                zip(*[self(deterministic=deterministic, generator_index=index,
                                           states=tf.convert_to_tensor(state[:, :, index, :]),
-                                          actor=self._actor) for index in range(len(self._agent_ids))]))
+                                          ) for index in range(state.shape[2])]))
             if self._actor_uses_log_probs:
                 return actions_one_hot, log_probs
             else:
                 return actions_one_hot, probs
 
+    """
+    
+    """
     @tf.function
-    def sample_actions(self, states, actor, generator_index:int = 0, deterministic=False):
-        output_groups = actor(states) # first one for actions, rest for communication channels
+    def __call__(self, states, generator_index:int, deterministic=False):
+        output_groups = self._actor(states) # first one for actions, rest for communication channels
         output_groups = output_groups if type(output_groups) == list else [output_groups]
         if self._actor_uses_log_probs:
             log_prob_groups = output_groups
         else:
             log_prob_groups = [tf.math.log(probabilities) for probabilities in output_groups]
+        log_prob_groups = [tf.math.maximum(-4.,tf.math.minimum(-0.1,log_probs)) if index>0 else log_probs for index, log_probs in enumerate(log_prob_groups)]
         if deterministic:
             action_groups = [tf.argmax(probabilities, axis=1) for probabilities in log_prob_groups]
         else:

@@ -26,14 +26,19 @@ class Config(Protocol):
     name: str = None
     VISIBLE_POSITIONS: Callable = None
 
+    # training
+    EPOCHS = 6000
+    SEED = 17
+    ENV_PARALLEL = 32
+    FROM_SAVE = False
+
     # Agent.py
-    COM_ALPHA = 0.01
-    MOV_ALPHA = 0.15
+    COM_ALPHA = -0.0
+    MOV_ALPHA = 0.18
     GAMMA = 0.99
     TAU = 0.005
     LEARNING_RATE = 0.0001
     RECURRENT = True
-    SELF_PLAY = True
 
     SOCIAL_INFLUENCE_SAMPLE_SIZE = 30
     SOCIAL_REWARD_WEIGHT = 0
@@ -41,13 +46,13 @@ class Config(Protocol):
     # ExperienceReplayBuffer.py
     BATCH_SIZE = 64
     TIME_STEPS = 10
+    MAX_REPLAY_BUFFER_SIZE = 10000
 
     # GenericMLPs1D.py
     LAYER_SIZE = 32
     LSTM_SIZE = 32
     NUMBER_OF_BIG_LAYERS = 2
 
-    # socialinfluence
 
     # environment
     WORLD_GENERATOR = "random"  # multi or random or choice
@@ -57,25 +62,17 @@ class Config(Protocol):
     COMMUNISM = False
     AGENT_DROPOUT_PROBS = 0  # 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
     NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6)
-    OBJECT_COLOR_RANGE = (10, 20)
+    OBJECT_COLOR_RANGE = (12, 20)
     POS_REWARD = 2
-    NEG_REWARD = -0.1
+    NEG_REWARD = -0.1 if not WORLD_GENERATOR == "choice" else 0
     REWARD_TYPE = "race"
-    XENIA_LOCK = False
+    XENIA_LOCK = True
     XENIA_PERMANENCE = True
 
     # input
-    NUMBER_COMMUNICATION_CHANNELS = 1
+    NUMBER_COMMUNICATION_CHANNELS = 2
     SIZE_VOCABULARY = OBJECT_COLOR_RANGE[1]
 
-    # buffer
-    MAX_REPLAY_BUFFER_SIZE = 10000
-
-    # training
-    EPOCHS = 1000
-    SEED = 16
-    ENV_PARALLEL = 32
-    FROM_SAVE = False
 
     def __call__(self, catched=True):
         if not catched:
@@ -135,7 +132,7 @@ class Config(Protocol):
                                 time_steps=self.TIME_STEPS, agent_num=self.NUMBER_OF_AGENTS)
 
         self.trainer = self.get_trainer(env=env, policy_network=policy_network, value_network=value_network)
-        self.trainer.train(render=RENDER, epochs=self.EPOCHS)
+        self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
 
     @abstractmethod
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network) -> Trainer:
@@ -162,22 +159,22 @@ class SACConfig(Config):
             assert key in self.__dir__()
             setattr(self, key, value)
 
-    def get_trainer(self, env: CoopGridWorld, policiy_network, value_network):
-        return SACTrainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY,
+    def get_trainer(self, env: CoopGridWorld, policy_network, value_network):
+        return SACTrainer(environment=env, from_save=self.FROM_SAVE,
                           agent_ids=env.stats.agent_ids,
                           state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
                           run_name=self.name,
                           max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
                           social_reward_weight=self.SOCIAL_REWARD_WEIGHT,
                           social_influence_sample_size=self.SOCIAL_INFLUENCE_SAMPLE_SIZE,
-                          actor_network_generator=policiy_network,
+                          actor_network_generator=policy_network,
                           critic_network_generator=value_network,
                           seed=self.SEED,
                           env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE,
-                          alpha=self.MOV_ALPHA,
+                          mov_alpha=self.MOV_ALPHA,
                           target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, com_alpha=self.COM_ALPHA,
                           batches_per_epoch=self.BATCHES_PER_EPOCH, pre_sampling_steps=self.PRE_SAMPLING_STEPS,
-                          environment_steps_per_epoch=self.ENVIRONMENT_STEPS_PER_EPOCH, tau=self.TAU)
+                          environment_steps_per_epoch=self.ENVIRONMENT_STEPS_PER_EPOCH, tau=self.TAU, )
 
     @property
     def actor_output_activation(self) -> str:
@@ -199,7 +196,7 @@ class PPOConfig(Config):
             setattr(self, key, value)
 
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network):
-        return PPOTrainer(environment=env, from_save=self.FROM_SAVE, self_play=self.SELF_PLAY,
+        return PPOTrainer(environment=env, from_save=self.FROM_SAVE,
                           agent_ids=env.stats.agent_ids,
                           state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
                           run_name=self.name,

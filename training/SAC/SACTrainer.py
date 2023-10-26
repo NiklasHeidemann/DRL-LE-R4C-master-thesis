@@ -8,9 +8,9 @@ from typing_extensions import override
 from domain import RenderSaveExtended
 from environment.envbatcher import EnvBatcher
 from environment.render import render_permanently
-from loss_logger import CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, MAX_Q_VALUES, ALPHA_VALUES, \
-    ENTROPY, COM_ENTROPY, N_AGENT_RETURNS, TEST_RETURNS
-from timer import MultiTimer
+from utils.loss_logger import CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, RETURNS, Q_VALUES, MAX_Q_VALUES, ALPHA_VALUES, \
+    ENTROPY, COM_ENTROPY, N_AGENT_RETURNS, TEST_RETURNS, TEST_SOCIAL_RETURNS
+from utils.timer import MultiTimer
 from training.ExperienceReplayBuffer import STATE_KEY, ACTION_KEY, REWARD_KEY
 from training.SAC.ExperienceReplayBuffer import SACExperienceReplayBuffer, STATE_PRIME_KEY, DONE_KEY
 from training.SAC.SACagent import SACAgent
@@ -18,8 +18,8 @@ from training.Trainer import Trainer
 
 
 class SACTrainer(Trainer):
-    def __init__(self, environment, self_play: bool, agent_ids: List[str], state_dim, action_dim, from_save: bool,
-                 actor_network_generator, critic_network_generator, max_replay_buffer_size: int, learning_rate, gamma, alpha, com_alpha: float, env_parallel: int, seed: int, run_name: str,
+    def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
+                 actor_network_generator, critic_network_generator, max_replay_buffer_size: int, gamma: float, mov_alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
                  social_reward_weight: float,
                  social_influence_sample_size: int,
                  batch_size: int, target_entropy: float, tau: float, batches_per_epoch: int,
@@ -31,16 +31,16 @@ class SACTrainer(Trainer):
                                                   max_size=max_replay_buffer_size, batch_size=batch_size,
                                                   time_steps=environment.stats.recurrency)
         agent = SACAgent(environment=environment, env_batcher=self._env_batcher, seed=seed,
-                         self_play=self_play, agent_ids=agent_ids,
+                         agent_ids=agent_ids,
                          actor_network_generator=actor_network_generator,
                          social_influence_sample_size=social_influence_sample_size,
                          social_reward_weight=social_reward_weight,
-                         critic_network_generator=critic_network_generator, learning_rate=learning_rate, gamma=gamma, tau=tau, alpha=alpha, com_alpha=com_alpha,
+                         critic_network_generator=critic_network_generator, gamma=gamma, tau=tau, mov_alpha=mov_alpha, com_alpha=com_alpha,
                          batch_size=batch_size, model_path=model_path, target_entropy=target_entropy)
         metrics = {
             100: [CRITIC_LOSS, ACTOR_LOSS, LOG_PROBS, Q_VALUES, MAX_Q_VALUES, ENTROPY, COM_ENTROPY],
             10: [ALPHA_VALUES],
-            3: [TEST_RETURNS],
+            3: [TEST_RETURNS, TEST_SOCIAL_RETURNS],
             1000: [RETURNS, N_AGENT_RETURNS(2), N_AGENT_RETURNS(3)]
         }
         self._init(environment=environment, agent=agent, replay_buffer=replay_buffer,
@@ -99,7 +99,7 @@ class SACTrainer(Trainer):
         return observation_array, epoch_array, return_array
 
     @override
-    def train(self, epochs: int, render: bool):
+    def train(self, num_epochs: int, render: bool):
         self._pre_sample(pre_sampling_steps=self._pre_sampling_steps)
         if render:
             self._last_render_as_list = []
@@ -115,7 +115,7 @@ class SACTrainer(Trainer):
         return_array = np.zeros(shape=(self._env_batcher.size))
 
         render_save = []
-        epoch_array = np.array(list(range(self._env_batcher.size)))
+        epoch_array = np.array(list(range(self._env_batcher.size))) + self.epoch
         steps_total = 0
         while True:
             steps = 0
@@ -127,7 +127,8 @@ class SACTrainer(Trainer):
                                                                       render_save=render_save, render=render,
                                                                       return_array=return_array, done_mask=done,
                                                                       observation_array=observation_array)
-                if min(epoch_array) >= epochs:
+                self.epoch = min(epoch_array)
+                if self.epoch >= num_epochs:
                     print("training finished!")
                     return
                 observation_array, ret, done, action_probs_0 = self._env_step(

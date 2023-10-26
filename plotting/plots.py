@@ -33,6 +33,6 @@ def plot_multiple(run_name: str, values: Mapping[str, Sequence[float]])->None:
     main_fig.write_image(f"plots/__{run_name}_all.png")
     print("plotting thread end")
 def delete_old_plots():
-    for path in os.listdir("."):
+    for path in os.listdir(".."):
         if path.endswith(".png") and not path.startswith("_"):
             os.remove(path)

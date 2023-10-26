@@ -24,7 +24,7 @@ class EnvBatcher:
         terminated = np.zeros(shape=(len(self._envs)))
         truncated = np.zeros(shape=(len(self._envs)))
         for index, env in enumerate(self._envs):
-            obs[index], reward[index], terminated[index], truncated[index] = env.step(actions=actions_batch[index])
+            obs[index], reward[index], terminated[index], truncated[index], _ = env.step(actions=actions_batch[index])
         return obs, reward, terminated, truncated
 
     def reset_all(self):

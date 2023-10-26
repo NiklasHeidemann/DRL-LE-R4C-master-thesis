@@ -1,6 +1,6 @@
 import random
 from collections import deque
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Any
 
 import gymnasium
 import numpy as np
@@ -33,7 +33,7 @@ class CoopGridWorld(gymnasium.Env):
         self._xenia_lock = xenia_lock
         self._xenia_permanence = xenia_permanence
 
-    def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> np.ndarray:
+    def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
         self._grid, self._agent_positions, self._stats, self._type = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
@@ -69,7 +69,7 @@ class CoopGridWorld(gymnasium.Env):
     def step(self,
              actions: np.ndarray # dimensions: AgentID, Action+Communication
              ) -> Tuple[
-        np.array, np.ndarray, bool, bool
+        np.array, np.ndarray, bool, bool, Dict[str, Any]
     ]:
         self._stats.time_step+=1
         self._communications.append({})
@@ -93,6 +93,7 @@ class CoopGridWorld(gymnasium.Env):
             reward_array,
             is_terminated,
             is_truncated,
+            {}, #info for protocol of gym
         )
     def _move_agent(self, agent_id: str, movement: np.ndarray):
         assert sum(movement)==1, movement
@@ -117,8 +118,8 @@ class CoopGridWorld(gymnasium.Env):
 
 
     def render(self) -> RenderSave:
-        grid = '\n'+'\n'.join([''.join([self._map_cell_to_char(pos=(x,y)) for y in range(self._grid.shape[1])]) for x in range(self._grid.shape[0])])
-        communication = '\t'.join([f"{agent_id}: '{_map_communication_to_str(communication=com) if len(com)>0 else ''}'" for agent_id, com in self._communications[-1].items()])
+        #grid = '\n'+'\n'.join([''.join([self._map_cell_to_char(pos=(x,y)) for y in range(self._grid.shape[1])]) for x in range(self._grid.shape[0])])
+        #communication = '\t'.join([f"{agent_id}: '{_map_communication_to_str(communication=com) if len(com)>0 else ''}'" for agent_id, com in self._communications[-1].items()])
         render_save = self._grid.copy(), self._agent_positions.copy(), self._last_agent_actions[-1], self._communications[-1], self.stats.time_step, self._agents_locked.copy()
         return render_save
     def state(self) -> np.ndarray:

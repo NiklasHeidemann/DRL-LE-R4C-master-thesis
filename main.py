@@ -13,7 +13,7 @@ def make_config(name: str, algo:str, special_vars: Dict[str, Any]):
     config_class = SACConfig if algo == "sac" else (PPOConfig if algo == "ppo" else None)
     return config_class(params=params)
 
-
+#group_image()
 runconfigs = [
     make_config("no_com_coop", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0}),
     make_config("no_com_race", "ppo", {"COMMUNISM":False, "NUMBER_COMMUNICATION_CHANNELS": 0,}),
@@ -23,8 +23,9 @@ runconfigs = [
     make_config("2_com", "ppo", {"COMMUNISM":False, "NUMBER_COMMUNICATION_CHANNELS": 2, "NUMBER_OF_AGENTS": 2}),
 ]
 
-#runconfigs = [
-#make_config("", "ppo", {}),
-#]
+runconfigs = [
+make_config("com", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 2}),
+make_config("no_com", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 0}),
+]
 for config in runconfigs:
     config(catched=False)

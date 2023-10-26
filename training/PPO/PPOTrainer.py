@@ -7,10 +7,9 @@ from typing_extensions import override
 
 from environment.envbatcher import EnvBatcher
 from environment.render import render_permanently
-from language.predictGoal import TrainPredictGoal
-from loss_logger import CRITIC_LOSS, ACTOR_LOSS, RETURNS, V_VALUES, ENTROPY, COM_ENTROPY, KLD, AVG_ADVANTAGE, \
+from utils.loss_logger import CRITIC_LOSS, ACTOR_LOSS, RETURNS, V_VALUES, ENTROPY, COM_ENTROPY, KLD, AVG_ADVANTAGE, \
     STD_ADVANTAGE, TEST_RETURNS, \
-    SOCIAL_REWARD, PREDICTED_GOAL
+    SOCIAL_REWARD, PREDICTED_GOAL, TEST_SOCIAL_RETURNS
 from training.ExperienceReplayBuffer import STATE_KEY, REWARD_KEY
 from training.PPO.ExperienceReplayBuffer import PPOExperienceReplayBuffer, ADVANTAGE_KEY
 from training.PPO.PPOagent import PPOAgent
@@ -19,7 +18,7 @@ from training.Trainer import Trainer
 
 class PPOTrainer(Trainer):
 
-    def __init__(self, environment, self_play: bool, agent_ids: List[str], state_dim, action_dim, from_save: bool,
+    def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, gae_lambda: float,
                  social_influence_sample_size: int, social_reward_weight: float, tau: float,
                  gamma: float, alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
@@ -31,7 +30,7 @@ class PPOTrainer(Trainer):
                                                         max_size=batch_size * 20, batch_size=batch_size,
                                                         time_steps=environment.stats.recurrency)
         agent = PPOAgent(environment_batcher=self._env_batcher, seed=seed,
-                         self_play=self_play, agent_ids=agent_ids,
+                          agent_ids=agent_ids,
                          actor_network_generator=actor_network_generator,
                          gae_lamda=gae_lambda, social_reward_weight=social_reward_weight,
                          critic_network_generator=critic_network_generator, gamma=gamma, tau=tau,
@@ -40,7 +39,7 @@ class PPOTrainer(Trainer):
                          epsilon=epsilon, kld_threshold=kld_threshold)
         metrics =        {
             10: [CRITIC_LOSS, ACTOR_LOSS, V_VALUES, KLD, AVG_ADVANTAGE, STD_ADVANTAGE],
-        3: [ENTROPY, COM_ENTROPY, TEST_RETURNS],
+        3: [ENTROPY, COM_ENTROPY, TEST_RETURNS, TEST_SOCIAL_RETURNS],
             20: [RETURNS, SOCIAL_REWARD],
             1: [PREDICTED_GOAL],
         }
@@ -49,11 +48,11 @@ class PPOTrainer(Trainer):
         self._steps_per_trajectory = steps_per_trajectory
 
     @override
-    def train(self, epochs: int, render: bool):
+    def train(self, num_epochs: int, render: bool):
 
         """
         trains the SAC Agent
-        :param epochs: Number of epochs to train.
+        :param num_epochs: Number of epochs to train.
         :param render: If true, the environment is rendered during testing.
         """
         self._last_render_as_list = []
@@ -61,7 +60,8 @@ class PPOTrainer(Trainer):
             thread = Thread(target=render_permanently, args=[self._last_render_as_list])
             thread.start()
         print("start training!")
-        for e in range(epochs):
+        epoch_this_training = 0
+        while self.epoch < num_epochs:
             arrays, render_list, social_rewards = self._agent.sample_trajectories(
                 steps_per_trajectory=self._steps_per_trajectory, render=render)
             self._replay_buffer.add_transition_batch(arrays)
@@ -69,6 +69,7 @@ class PPOTrainer(Trainer):
                                           RETURNS: tf.reduce_mean(arrays[REWARD_KEY]),
                                             AVG_ADVANTAGE: tf.reduce_mean(arrays[ADVANTAGE_KEY]),
                                             STD_ADVANTAGE: tf.math.reduce_std(arrays[ADVANTAGE_KEY])})
+            actor_metrics, critic_metrics = {},{}
             for batch in list(self._replay_buffer.get_all_repeated(repetitions=4)):
                 batch_concat = {
                     key: tf.concat([array[:, :, index, :] if key==STATE_KEY else array[:,index] for index in range(self._environment.stats.number_of_agents)],axis=0) for key, array in batch.items()
@@ -81,12 +82,14 @@ class PPOTrainer(Trainer):
                 self._loss_logger.add_aggregatable_values(critic_metrics)
             self._loss_logger.avg_aggregatables(
                 list(actor_metrics.keys())+list(critic_metrics.keys()))
-            print("epoch", e, "avg reward {:.2f}".format(tf.reduce_mean(arrays[REWARD_KEY])), "early_stopping", early_stopping)
+            print(f"epoch (now/all_time/max): ({epoch_this_training}/{self.epoch}/{num_epochs})", "avg reward {:.2f}".format(tf.reduce_mean(arrays[REWARD_KEY])), "early_stopping", early_stopping)
             self._replay_buffer.clear()
             self._agent.update_target_weights()
-            if e % 10 == 0:
+            if self.epoch % 10 == 0:
                 self._every_few_epochs(render=render)
-            if self._environment.stats.number_communication_channels > 0 and e % 100 == 0:
+            if self._environment.stats.number_communication_channels > 0 and self.epoch % 100 == 0:
                 self._loss_logger.add_value(identifier=PREDICTED_GOAL,
                                             value=self._train_predict_goal(agent=self._agent))
+            self.epoch += 1
+            epoch_this_training += 1
         print("training finished!")
