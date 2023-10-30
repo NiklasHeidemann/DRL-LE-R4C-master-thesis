@@ -21,7 +21,7 @@ class SACTrainer(Trainer):
     def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, max_replay_buffer_size: int, gamma: float, mov_alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
                  social_reward_weight: float,
-                 social_influence_sample_size: int,
+                 social_influence_sample_size: int,epsilon:Optional[float],
                  batch_size: int, target_entropy: float, tau: float, batches_per_epoch: int,
                  environment_steps_per_epoch: int, pre_sampling_steps: int, model_path="model/"):
         super().__init__()
@@ -34,7 +34,7 @@ class SACTrainer(Trainer):
                          agent_ids=agent_ids,
                          actor_network_generator=actor_network_generator,
                          social_influence_sample_size=social_influence_sample_size,
-                         social_reward_weight=social_reward_weight,
+                         social_reward_weight=social_reward_weight,epsilon=epsilon,
                          critic_network_generator=critic_network_generator, gamma=gamma, tau=tau, mov_alpha=mov_alpha, com_alpha=com_alpha,
                          batch_size=batch_size, model_path=model_path, target_entropy=target_entropy)
         metrics = {

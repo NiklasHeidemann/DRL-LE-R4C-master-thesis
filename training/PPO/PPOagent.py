@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
 import numpy as np
 import tensorflow as tf
@@ -17,15 +17,15 @@ class PPOAgent(Agent):
 
     #todo
     def __init__(self, environment_batcher, agent_ids: List[str], actor_network_generator, critic_network_generator,
-                 epsilon: float,
+                 ppo_epsilon: float,epsilon:Optional[float],
                  gamma: float, tau: float, alpha: float, com_alpha: float, social_reward_weight:float,
                  model_path: str, seed: int, gae_lamda: float, kld_threshold: float, social_influence_sample_size: int):
         super().__init__()
         self._environment_batcher_ = environment_batcher
         self._kld_threshold = kld_threshold
         self._gae_lamda = gae_lamda
-        self._epsilon = epsilon
-        self._init(agent_ids=agent_ids, actor_network_generator=actor_network_generator, actor_uses_log_probs=True,
+        self._ppo_epsilon = ppo_epsilon
+        self._init(agent_ids=agent_ids, epsilon=epsilon,actor_network_generator=actor_network_generator, actor_uses_log_probs=True,
                    critic_network_generator=critic_network_generator, gamma=gamma, tau=tau, mov_alpha=alpha, com_alpha=com_alpha,
                    model_path=model_path, seed=seed, social_influence_sample_size=social_influence_sample_size, social_reward_weight=social_reward_weight)
 
@@ -58,7 +58,7 @@ class PPOAgent(Agent):
                 probability_groups = tf.concat(probability_groups, axis=1)
             log_prob_current = tf.reduce_sum(probability_groups * action, axis=1) #tf.gather
             p = tf.math.exp(log_prob_current - prob_old)  # exp() to un do log(p)
-            clipped_p = tf.clip_by_value(p, 1 - self._epsilon, 1 + self._epsilon)
+            clipped_p = tf.clip_by_value(p, 1 - self._ppo_epsilon, 1 + self._ppo_epsilon)
             policy_loss = -tfm.reduce_mean(tfm.minimum(p * advantage, clipped_p * advantage))
             com_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[:,len(ACTIONS):]*tfm.exp(probability_groups[:,len(ACTIONS):]),axis=1))
             mov_entropy_loss = -tf.reduce_mean(tf.reduce_sum(probability_groups[:,:len(ACTIONS)]*tfm.exp(probability_groups[:,:len(ACTIONS)]),axis=1))

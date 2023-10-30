@@ -1,13 +1,14 @@
-from typing import Union, Dict, List
+from typing import Union, Dict, List, Optional
 
 import numpy as np
 import tensorflow as tf
 class ActionSampler:
     
-    def __init__(self, actor_uses_log_probs: bool, generators, actor: tf.keras.Model):
+    def __init__(self, actor_uses_log_probs: bool, generators, actor: tf.keras.Model, epsilon: Optional[float]):
         self._actor = actor
         self._generators = generators
         self._actor_uses_log_probs = actor_uses_log_probs
+        self._epsilon = epsilon
 
 
 
@@ -50,7 +51,10 @@ class ActionSampler:
             log_prob_groups = output_groups
         else:
             log_prob_groups = [tf.math.log(probabilities) for probabilities in output_groups]
-        log_prob_groups = [tf.math.maximum(-4.,tf.math.minimum(-0.1,log_probs)) if index>0 else log_probs for index, log_probs in enumerate(log_prob_groups)]
+        if self._epsilon is not None and len(log_prob_groups) > 1:
+            min_prob = tf.math.log(self._epsilon/(log_prob_groups[1].shape[-1]-1))
+            max_prob = tf.math.log(1-self._epsilon)
+            log_prob_groups = [tf.math.maximum(min_prob,tf.math.minimum(max_prob,log_probs)) if index>0 else log_probs for index, log_probs in enumerate(log_prob_groups)]
         if deterministic:
             action_groups = [tf.argmax(probabilities, axis=1) for probabilities in log_prob_groups]
         else:

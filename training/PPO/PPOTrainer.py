@@ -1,5 +1,5 @@
 from threading import Thread
-from typing import List
+from typing import List, Optional
 
 import numpy as np
 import tensorflow as tf
@@ -19,10 +19,10 @@ from training.Trainer import Trainer
 class PPOTrainer(Trainer):
 
     def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
-                 actor_network_generator, critic_network_generator, gae_lambda: float,
+                 actor_network_generator, critic_network_generator, gae_lambda: float, epsilon:Optional[float],
                  social_influence_sample_size: int, social_reward_weight: float, tau: float,
                  gamma: float, alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
-                 epsilon: float, steps_per_trajectory: int, kld_threshold: float,
+                 ppo_epsilon: float, steps_per_trajectory: int, kld_threshold: float,
                  batch_size: int, model_path="model/"):
         self._env_batcher = EnvBatcher(env=environment, batch_size=env_parallel)
         replay_buffer = PPOExperienceReplayBuffer(state_dims=state_dim, action_dims=action_dim,
@@ -36,7 +36,7 @@ class PPOTrainer(Trainer):
                          critic_network_generator=critic_network_generator, gamma=gamma, tau=tau,
                          social_influence_sample_size=social_influence_sample_size,
                          alpha=alpha, com_alpha=com_alpha, model_path=model_path,
-                         epsilon=epsilon, kld_threshold=kld_threshold)
+                         epsilon=epsilon, kld_threshold=kld_threshold, ppo_epsilon=ppo_epsilon)
         metrics =        {
             10: [CRITIC_LOSS, ACTOR_LOSS, V_VALUES, KLD, AVG_ADVANTAGE, STD_ADVANTAGE],
         3: [ENTROPY, COM_ENTROPY, TEST_RETURNS, TEST_SOCIAL_RETURNS],

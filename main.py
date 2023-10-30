@@ -3,15 +3,11 @@ from typing import Any, Dict
 import matplotlib
 
 from domain import visible_positions_13
-from runconfig import SACConfig, PPOConfig
+from experiments import exp_1_le_in_choice
+from runconfig import make_config
 
 matplotlib.use("agg")
 
-def make_config(name: str, algo:str, special_vars: Dict[str, Any]):
-    params = {"name": name, "VISIBLE_POSITIONS": visible_positions_13}
-    params.update(special_vars)
-    config_class = SACConfig if algo == "sac" else (PPOConfig if algo == "ppo" else None)
-    return config_class(params=params)
 
 #group_image()
 runconfigs = [
@@ -24,8 +20,9 @@ runconfigs = [
 ]
 
 runconfigs = [
-make_config("com", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 2}),
+#make_config("com", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 2}),
 make_config("no_com", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 0}),
 ]
+runconfigs = exp_1_le_in_choice
 for config in runconfigs:
     config(catched=False)

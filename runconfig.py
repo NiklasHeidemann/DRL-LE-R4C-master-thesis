@@ -6,7 +6,7 @@ from typing import Dict, Any, Callable
 import tensorflow as tf
 from typing_extensions import Protocol
 
-from domain import RENDER
+from domain import RENDER, visible_positions_13
 from environment.env import CoopGridWorld
 from environment.generator import RandomWorldGenerator, ChoiceWorldGenerator, MultiGenerator
 from environment.reward import RaceReward, SingleComputeReward
@@ -27,8 +27,8 @@ class Config(Protocol):
     VISIBLE_POSITIONS: Callable = None
 
     # training
-    EPOCHS = 6000
-    SEED = 17
+    EPOCHS = 2000
+    SEED = 18
     ENV_PARALLEL = 32
     FROM_SAVE = False
 
@@ -39,6 +39,7 @@ class Config(Protocol):
     TAU = 0.005
     LEARNING_RATE = 0.0001
     RECURRENT = True
+    EPSILON = None
 
     SOCIAL_INFLUENCE_SAMPLE_SIZE = 30
     SOCIAL_REWARD_WEIGHT = 0
@@ -58,11 +59,11 @@ class Config(Protocol):
     WORLD_GENERATOR = "random"  # multi or random or choice
     GRID_SIZE_RANGE = (12, 16)
     MAX_TIME_STEP = 30
-    NUMBER_OF_AGENTS = 3 if not WORLD_GENERATOR == "choice" else 2
+    NUMBER_OF_AGENTS = 3
     COMMUNISM = False
     AGENT_DROPOUT_PROBS = 0  # 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
     NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6)
-    OBJECT_COLOR_RANGE = (12, 20)
+    OBJECT_COLOR_RANGE = (1, 4)
     POS_REWARD = 2
     NEG_REWARD = -0.1 if not WORLD_GENERATOR == "choice" else 0
     REWARD_TYPE = "race"
@@ -70,7 +71,7 @@ class Config(Protocol):
     XENIA_PERMANENCE = True
 
     # input
-    NUMBER_COMMUNICATION_CHANNELS = 2
+    NUMBER_COMMUNICATION_CHANNELS = 0
     SIZE_VOCABULARY = OBJECT_COLOR_RANGE[1]
 
 
@@ -88,6 +89,7 @@ class Config(Protocol):
     def _catched_call(self):
         random.seed(self.SEED)
         tf.random.set_seed(self.SEED)
+        self.NUMBER_OF_AGENTS = self.NUMBER_OF_AGENTS if self.WORLD_GENERATOR!="choice" else 2
         if self.NUMBER_OF_AGENTS == 1:
             self.compute_reward = SingleComputeReward(pos_reward=self.POS_REWARD, neg_reward=self.NEG_REWARD)
         elif self.REWARD_TYPE == "race":
@@ -174,7 +176,7 @@ class SACConfig(Config):
                           mov_alpha=self.MOV_ALPHA,
                           target_entropy=self.TARGET_ENTROPY, gamma=self.GAMMA, com_alpha=self.COM_ALPHA,
                           batches_per_epoch=self.BATCHES_PER_EPOCH, pre_sampling_steps=self.PRE_SAMPLING_STEPS,
-                          environment_steps_per_epoch=self.ENVIRONMENT_STEPS_PER_EPOCH, tau=self.TAU, )
+                          environment_steps_per_epoch=self.ENVIRONMENT_STEPS_PER_EPOCH, tau=self.TAU, epsilon=self.EPSILON)
 
     @property
     def actor_output_activation(self) -> str:
@@ -184,7 +186,7 @@ class SACConfig(Config):
         return env.stats.action_dimension * self.NUMBER_OF_AGENTS
 
 class PPOConfig(Config):
-    EPSILON = 0.2
+    PPO_EPSILON = 0.2
     GAE_LAMBDA = 0.95
     KLD_THRESHHOLD = 0.05
     STEPS_PER_TRAJECTORIE = 1000
@@ -209,10 +211,16 @@ class PPOConfig(Config):
                           alpha=self.MOV_ALPHA,
                           gamma=self.GAMMA, com_alpha=self.COM_ALPHA, epsilon=self.EPSILON,
                           steps_per_trajectory=self.STEPS_PER_TRAJECTORIE, kld_threshold=self.KLD_THRESHHOLD,
-                          tau=self.TAU)
+                          tau=self.TAU, ppo_epsilon=self.PPO_EPSILON)
     @property
     def actor_output_activation(self) -> str:
         return self.ACTOR_OUTPUT_ACTIVATION
 
     def critic_output_dim(self, env: CoopGridWorld)->int:
         return self.NUMBER_OF_AGENTS
+
+def make_config(name: str, algo: str, special_vars: Dict[str, Any]):
+        params = {"name": name, "VISIBLE_POSITIONS": visible_positions_13}
+        params.update(special_vars)
+        config_class = SACConfig if algo == "sac" else (PPOConfig if algo == "ppo" else None)
+        return config_class(params=params)

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
 import numpy as np
 import tensorflow as tf
@@ -17,7 +17,7 @@ from training.SAC.ExperienceReplayBuffer import DONE_KEY, STATE_PRIME_KEY
 class SACAgent(Agent):
 
     def __init__(self, environment, agent_ids: List[str], actor_network_generator,
-                 critic_network_generator, env_batcher: EnvBatcher,
+                 critic_network_generator, env_batcher: EnvBatcher,epsilon:Optional[float],
                  gamma: float, tau: float, mov_alpha: float, com_alpha: float,
                  social_influence_sample_size: int,
                  batch_size: int, model_path: str, target_entropy: float, seed: int, social_reward_weight: float):
@@ -25,7 +25,7 @@ class SACAgent(Agent):
         self._environment_batcher_ = env_batcher
         self._batch_size = batch_size
         self._target_entropy = target_entropy
-        self._init(agent_ids=agent_ids, actor_network_generator=actor_network_generator,
+        self._init(agent_ids=agent_ids, epsilon=epsilon,actor_network_generator=actor_network_generator,
                    actor_uses_log_probs=False, social_reward_weight=social_reward_weight, social_influence_sample_size=social_influence_sample_size,
                    critic_network_generator=critic_network_generator,
                    gamma=gamma, tau=tau, mov_alpha=mov_alpha, com_alpha=com_alpha, model_path=model_path, seed=seed)
