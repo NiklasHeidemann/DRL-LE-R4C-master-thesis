@@ -165,7 +165,7 @@ class SACConfig(Config):
 
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
-            assert key in self.__dir__()
+            assert key in self.__dir__(), key
             setattr(self, key, value)
 
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network):
@@ -201,7 +201,7 @@ class PPOConfig(Config):
 
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
-            assert key in self.__dir__()
+            assert key in self.__dir__(), key
             setattr(self, key, value)
 
     @override

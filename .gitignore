@@ -3,7 +3,8 @@
 model
 logs
 logger
-
+logger/*
+nohup.out
 # Created by https://www.toptal.com/developers/gitignore/
 
 ### Git ###

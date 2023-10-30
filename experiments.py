@@ -28,8 +28,8 @@ def random_env_by_difficulty(communism: bool, number_of_agents: int, difficulty:
     elif difficulty=="hard":
         return random_env(num_colors=[10,20], xenia_lock=True, xenia_permanence=True, communism=communism, number_of_agents=number_of_agents, grid_size_range=[12,16])
 
-thompson_sampling = {"EPSILON": None, "L_ALPHA": 0.01}
-epsilon_sampling = {"EPSILON": 0.1, "L_ALPHA": 0.}
+thompson_sampling = {"EPSILON": None, "COM_ALPHA": 0.01}
+epsilon_sampling = {"EPSILON": 0.1, "COM_ALPHA": 0.}
 
 
 exp_1_le_in_choice = [
