@@ -25,11 +25,12 @@ PREDICTED_GOAL = "predicted_goal"
 
 class LossLogger:
 
-    def __init__(self):
+    def __init__(self, run_name: str):
         self._var_dict: Dict[str, List[Any]] = {}
         self._is_smoothed: Dict[str, Optional[int]] = {}
         self._smoothed: Dict[str, List[Any]] = {}
         self._aggregator: Dict[str, List[float]] = defaultdict(list)
+        self._run_name = run_name
 
     def add_list(self, identifier: str, smoothed: Optional[int]=None)->None:
         self._var_dict[identifier] = []
@@ -80,11 +81,13 @@ class LossLogger:
         return self._smoothed
 
     def save(self, path: str)->None:
-        np.savez(f"{path}/logger_var_dict", **self._var_dict)
-        np.savez(f"{path}/logger_smoothed", **self._smoothed)
-        np.savez(f"{path}/logger_is_smoothed", **self._is_smoothed)
+        base_path = f"{path}/{self._run_name}_"
+        np.savez(f"{base_path}logger_var_dict", **self._var_dict)
+        np.savez(f"{base_path}logger_smoothed", **self._smoothed)
+        np.savez(f"{base_path}logger_is_smoothed", **self._is_smoothed)
 
     def load(self, path: str)->None:
-        self._var_dict = {key: list(value) for key, value in dict(np.load(f"{path}/logger_var_dict.npz")).items()}
-        self._smoothed = {key: list(value) for key, value in dict(np.load(f"{path}/logger_smoothed.npz")).items()}
-        self._is_smoothed = {key: value for key, value in dict(np.load(f"{path}/logger_is_smoothed.npz")).items()}
+        base_path = f"{path}/{self._run_name}_"
+        self._var_dict = {key: list(value) for key, value in dict(np.load(f"{base_path}logger_var_dict.npz")).items()}
+        self._smoothed = {key: list(value) for key, value in dict(np.load(f"{base_path}logger_smoothed.npz")).items()}
+        self._is_smoothed = {key: value for key, value in dict(np.load(f"{base_path}logger_is_smoothed.npz")).items()}

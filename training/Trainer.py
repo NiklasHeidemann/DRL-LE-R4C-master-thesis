@@ -18,7 +18,7 @@ from training.ExperienceReplayBuffer import ExperienceReplayBuffer
 class Trainer(Protocol):
 
     def _init(self, environment, agent: Agent, replay_buffer: ExperienceReplayBuffer, run_name:str, from_save: bool, metrics: Dict[int,List[str]]):
-        self._loss_logger = LossLogger()
+        self._loss_logger = LossLogger(run_name=run_name)
         self._environment = environment
         self._agent = agent
         self._last_render_as_list: List[List[RenderSaveExtended]] = []

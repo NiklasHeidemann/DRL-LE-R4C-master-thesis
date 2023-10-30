@@ -88,13 +88,13 @@ class PPOAgent(Agent):
             adv[t] = last_gae_lamda = delta + self._gamma * self._gae_lamda * next_non_terminal * last_gae_lamda
         return adv
 
-    def get_values(self, states):
+    def get_values(self, states: tf.Tensor):
         reshaped_states = tf.reshape(states, (states.shape[0], self._environment_batcher._stats.recurrency, self._environment_batcher._stats.observation_dimension * len(self._agent_ids)))
         v1 = self._critic_1(reshaped_states)
         v2 = self._critic_2(reshaped_states)
         return tf.minimum(v1, v2)
 
-    def sample_trajectories(self, steps_per_trajectory, render=False):
+    def sample_trajectories(self, steps_per_trajectory:int, render:bool):
         observation = self._environment_batcher.reset_all()
         rewards, dones, values, observations, actions, probabilities, social_rewards = [], [], [], [], [], [], []
         current_render_list: List[RenderSaveExtended] = []

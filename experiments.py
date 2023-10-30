@@ -28,13 +28,18 @@ def random_env_by_difficulty(communism: bool, number_of_agents: int, difficulty:
     elif difficulty=="hard":
         return random_env(num_colors=[10,20], xenia_lock=True, xenia_permanence=True, communism=communism, number_of_agents=number_of_agents, grid_size_range=[12,16])
 
+thompson_sampling = {"EPSILON": None, "L_ALPHA": 0.01}
+epsilon_sampling = {"EPSILON": 0.1, "L_ALPHA": 0.}
+
 
 exp_1_le_in_choice = [
-    make_config("exp_1_a_no_com_easy", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(4)}),
-    make_config("exp_1_b_com_easy", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4)}),
-    make_config("exp_1_c_com_hard", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(12)}),
+    make_config("exp_1_a_no_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(4),**epsilon_sampling, "EPOCHS": 1000}),
+    make_config("exp_1_b_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4),**epsilon_sampling}),
+    make_config("exp_1_c_com_hard_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(12),**epsilon_sampling}),
+    make_config("exp_1_d_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4),**thompson_sampling}),
+    make_config("exp_1_e_com_hard_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(12),**thompson_sampling}),
+    make_config("exp_1_f_no_com_hard_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(12),**thompson_sampling, "EPOCHS": 1000})
 ]
-
 exp_2_le_in_random = [
     make_config("exp_2_a_no_com_very_easy", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 0,  **random_env_by_difficulty(communism=True, number_of_agents=2, difficulty="very easy")}),
     make_config("exp_2_b_com_very_easy", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 1,  **random_env_by_difficulty(communism=True, number_of_agents=2, difficulty="very easy")}),

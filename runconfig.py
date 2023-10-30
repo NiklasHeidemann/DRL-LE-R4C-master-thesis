@@ -1,10 +1,11 @@
+import json
 import random
 from abc import abstractmethod
 from functools import partial
 from typing import Dict, Any, Callable
 
 import tensorflow as tf
-from typing_extensions import Protocol
+from typing_extensions import Protocol, override
 
 from domain import RENDER, visible_positions_13
 from environment.env import CoopGridWorld
@@ -134,7 +135,13 @@ class Config(Protocol):
                                 time_steps=self.TIME_STEPS, agent_num=self.NUMBER_OF_AGENTS)
 
         self.trainer = self.get_trainer(env=env, policy_network=policy_network, value_network=value_network)
+        self.save()
         self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
+
+    @abstractmethod
+    def save(self):
+        ...
+
 
     @abstractmethod
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network) -> Trainer:
@@ -197,6 +204,13 @@ class PPOConfig(Config):
             assert key in self.__dir__()
             setattr(self, key, value)
 
+    @override
+    def save(self):
+        attributes = {key: str(getattr(self, key)) for key in self.__dir__() if not key.startswith("_")}
+        with open(f"runconfigs/{self.name}.json", "w") as file:
+            json.dump(attributes,file)
+
+    @override
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network):
         return PPOTrainer(environment=env, from_save=self.FROM_SAVE,
                           agent_ids=env.stats.agent_ids,

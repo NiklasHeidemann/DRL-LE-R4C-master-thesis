@@ -116,10 +116,13 @@ class Agent(Protocol):
             (batched_actions, observation_prime, reward, tf.math.logical_or(done, truncated)), batched_action_probs,
             social_reward)
 
-    def compute_social_reward(self, observation_prime: tf.Tensor, deterministic: bool) -> float:
+    def compute_social_reward(self, observation_prime: tf.Tensor, deterministic: bool) -> np.ndarray:
         return self._social_reward_computer(observation_prime=observation_prime,
                                                                   deterministic=deterministic,actor=self._actor)
 
+    @abstractmethod
+    def get_values(self, states: tf.Tensor)->tf.Tensor:
+        ...
     @property
     @abstractmethod
     def _environment_batcher(self):

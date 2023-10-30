@@ -82,7 +82,7 @@ class PPOTrainer(Trainer):
                 self._loss_logger.add_aggregatable_values(critic_metrics)
             self._loss_logger.avg_aggregatables(
                 list(actor_metrics.keys())+list(critic_metrics.keys()))
-            print(f"epoch (now/all_time/max): ({epoch_this_training}/{self.epoch}/{num_epochs})", "avg reward {:.2f}".format(tf.reduce_mean(arrays[REWARD_KEY])), "early_stopping", early_stopping)
+            print(f"{self._run_name}: epoch (now/all_time/max): ({epoch_this_training}/{self.epoch}/{num_epochs})", "avg reward {:.2f}".format(tf.reduce_mean(arrays[REWARD_KEY])), "early_stopping", early_stopping)
             self._replay_buffer.clear()
             self._agent.update_target_weights()
             if self.epoch % 10 == 0:
