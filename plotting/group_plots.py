@@ -9,8 +9,8 @@ from plotly.subplots import make_subplots
 from utils.loss_logger import ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD
 
 
-ROOT_PATH = Path("/saves/ssh/plots")
-SAVE_PATH = Path("/saves/ssh/")
+ROOT_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/ssh/plots/plots")
+SAVE_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/ssh/")
 KEYS = [ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD]
 
 def group_image():
@@ -35,3 +35,7 @@ def group_image():
         fig.update_layout(font=dict(size=30))
         print("grouping plots for", key)
         fig.write_image(str(SAVE_PATH / f"{key}.png"))
+
+
+if __name__ == '__main__':
+    group_image()
