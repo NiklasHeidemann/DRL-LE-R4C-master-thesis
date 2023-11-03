@@ -40,7 +40,7 @@ class Trainer(Protocol):
         return ((self._environment.render(), action_probs, values_by_agent))
 
     @abstractmethod
-    def train(self, num_epochs: int, render: bool)->None:
+    def train(self, num_epochs: int, render: bool)->LossLogger:
         ...
 
     def test(self, n_samples: int, render: bool)->(float, float):

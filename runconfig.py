@@ -15,7 +15,7 @@ from training.GenericMLPs1D import create_policy_network, create_critic_network
 from training.PPO.PPOTrainer import PPOTrainer
 from training.SAC.SACTrainer import SACTrainer
 from training.Trainer import Trainer
-
+from utils.loss_logger import LossLogger
 
 """
 Class to ease experiments with multiple configurations. A standard configuration is set by the constants below.
@@ -88,7 +88,7 @@ class Config(Protocol):
                 with open(f"error_{self.name}_error.txt", "w") as f:
                     f.write(str(e))
 
-    def _catched_call(self):
+    def _catched_call(self)->LossLogger:
         random.seed(self.SEED)
         tf.random.set_seed(self.SEED)
         neg_reward = self.NEG_REWARD if self.WORLD_GENERATOR != "choice" else self.CHOICE_NEG_REWARD
@@ -136,7 +136,7 @@ class Config(Protocol):
 
         self.trainer = self.get_trainer(env=env, policy_network=policy_network, value_network=value_network)
         self.save()
-        self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
+        return self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
 
     @abstractmethod
     def save(self):
