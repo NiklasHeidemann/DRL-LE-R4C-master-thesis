@@ -15,7 +15,7 @@ class SocialRewardComputer:
         self._mse = tf.keras.losses.MeanSquaredError()
         self._generators = generators
     def __call__(self, observation_prime, deterministic: bool, actor: tf.keras.Model)->np.ndarray:
-        if self._stats.number_communication_channels == 0:
+        if self._stats.number_communication_channels == 0 or self._stats.number_of_agents<2:
             return np.zeros(shape=(self._num_agents,))
         actual_probs = np.moveaxis(np.array(
             [actor(observation_prime[:, :, agent_index, :])[0] for agent_index in

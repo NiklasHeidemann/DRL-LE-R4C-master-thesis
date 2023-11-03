@@ -25,7 +25,7 @@ class Stats:
 
     @property
     def stats_observation(self)->np.ndarray:
-        return np.array([self.max_time_step/30, self.time_step/self.max_time_step, self.number_of_used_colors/self.size_vocabulary])
+        return np.array([self.max_time_step/30, self.time_step/self.max_time_step*0, self.number_of_used_colors/self.size_vocabulary])
 
     @property
     def number_of_visible_positions(self)->int:

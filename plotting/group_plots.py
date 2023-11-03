@@ -6,12 +6,12 @@ from pathlib import Path
 import plotly.graph_objects as go
 from PIL import Image
 from plotly.subplots import make_subplots
-from utils.loss_logger import ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD
+from utils.loss_logger import ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, \
+    AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD, TEST_SOCIAL_RETURNS
 
-
-ROOT_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/ssh/plots/plots")
-SAVE_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/ssh/")
-KEYS = [ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD]
+ROOT_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/exp_1")
+SAVE_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/all")
+KEYS = [ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD, TEST_SOCIAL_RETURNS]
 
 def group_image():
     for key in KEYS:

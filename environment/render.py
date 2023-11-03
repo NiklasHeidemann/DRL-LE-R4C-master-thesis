@@ -28,17 +28,18 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
     window.fill(background_color)  # fill background with color
     # make draw calls
 
+    cell_size = min(50, 500 // len(grid))
     for row in range(len(grid)):
         for col in range(len(grid[0])):
             color = default_cell_color if sum(grid[row, col]) == 0 else cell_colors[grid[row, col].argmax()]
-            pygame.draw.rect(surface=window, color=color, rect=(50 * col, 50 * row, 49, 49))
+            pygame.draw.rect(surface=window, color=color, rect=(cell_size * col, cell_size * row, cell_size-1, cell_size-1))
 
     my_font = pygame.font.SysFont('Comic Sans MS', 30)
     for id, position in agent_positions.items():
         if position is not None:
             row, col = position
             text_field = my_font.render(id, True, background_color)
-            window.blit(text_field, (col * 50 + 10, row * 50 + 10))
+            window.blit(text_field, (col * cell_size + 10, row * cell_size + 10))
 
     pygame.draw.rect(surface=window, color=textfield_color, rect=(500, 0, 500, 500))
     text_field = my_font.render(f"timestep:     {timestep}", True, background_color)

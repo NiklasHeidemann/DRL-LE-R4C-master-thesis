@@ -38,9 +38,9 @@ class PPOTrainer(Trainer):
                          alpha=alpha, com_alpha=com_alpha, model_path=model_path,
                          epsilon=epsilon, kld_threshold=kld_threshold, ppo_epsilon=ppo_epsilon)
         metrics =        {
-            10: [CRITIC_LOSS, ACTOR_LOSS, V_VALUES, KLD, AVG_ADVANTAGE, STD_ADVANTAGE],
-        3: [ENTROPY, COM_ENTROPY, TEST_RETURNS, TEST_SOCIAL_RETURNS],
-            20: [RETURNS, SOCIAL_REWARD],
+            50: [CRITIC_LOSS, ACTOR_LOSS, V_VALUES, KLD, AVG_ADVANTAGE, STD_ADVANTAGE],
+        20: [ENTROPY, COM_ENTROPY, TEST_RETURNS, TEST_SOCIAL_RETURNS],
+            100: [RETURNS, SOCIAL_REWARD],
             1: [PREDICTED_GOAL],
         }
         self._init(environment=environment, agent=agent, replay_buffer=replay_buffer, run_name=run_name,

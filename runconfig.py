@@ -9,7 +9,7 @@ from typing_extensions import Protocol, override
 
 from domain import RENDER, visible_positions_13
 from environment.env import CoopGridWorld
-from environment.generator import RandomWorldGenerator, ChoiceWorldGenerator, MultiGenerator
+from environment.generator import RandomWorldGenerator, ChoiceWorldGenerator, MultiGenerator, ManhattanGenerator
 from environment.reward import RaceReward, SingleComputeReward
 from training.GenericMLPs1D import create_policy_network, create_critic_network
 from training.PPO.PPOTrainer import PPOTrainer
@@ -47,7 +47,7 @@ class Config(Protocol):
 
     # ExperienceReplayBuffer.py
     BATCH_SIZE = 64
-    TIME_STEPS = 10
+    LSTM_TIME_STEPS = 10
     MAX_REPLAY_BUFFER_SIZE = 10000
 
     # GenericMLPs1D.py
@@ -65,8 +65,9 @@ class Config(Protocol):
     AGENT_DROPOUT_PROBS = 0  # 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
     NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6)
     OBJECT_COLOR_RANGE = (1, 4)
-    POS_REWARD = 2
-    NEG_REWARD = -0.1 if not WORLD_GENERATOR == "choice" else 0
+    POS_REWARD = 1
+    NEG_REWARD = -0.05
+    CHOICE_NEG_REWARD = 0.
     REWARD_TYPE = "race"
     XENIA_LOCK = True
     XENIA_PERMANENCE = True
@@ -90,11 +91,11 @@ class Config(Protocol):
     def _catched_call(self):
         random.seed(self.SEED)
         tf.random.set_seed(self.SEED)
-        self.NUMBER_OF_AGENTS = self.NUMBER_OF_AGENTS if self.WORLD_GENERATOR!="choice" else 2
+        neg_reward = self.NEG_REWARD if self.WORLD_GENERATOR != "choice" else self.CHOICE_NEG_REWARD
         if self.NUMBER_OF_AGENTS == 1:
-            self.compute_reward = SingleComputeReward(pos_reward=self.POS_REWARD, neg_reward=self.NEG_REWARD)
+            self.compute_reward = SingleComputeReward(pos_reward=self.POS_REWARD, neg_reward=neg_reward)
         elif self.REWARD_TYPE == "race":
-            self.compute_reward = RaceReward(pos_reward=self.POS_REWARD, neg_reward=self.NEG_REWARD,
+            self.compute_reward = RaceReward(pos_reward=self.POS_REWARD, neg_reward=neg_reward,
                                              communism=self.COMMUNISM)
         else:
             raise NotImplemented()
@@ -105,34 +106,33 @@ class Config(Protocol):
                                                       number_of_object_colors_range=self.OBJECT_COLOR_RANGE,
                                                       agent_dropout_probs=self.AGENT_DROPOUT_PROBS,
                                                       max_time_step=self.MAX_TIME_STEP)
-        choice_world_generator = ChoiceWorldGenerator(seed=self.SEED, object_color_range=self.OBJECT_COLOR_RANGE)
+        choice_world_generator = ChoiceWorldGenerator(seed=self.SEED, object_color_range=self.OBJECT_COLOR_RANGE, number_of_agents=self.NUMBER_OF_AGENTS)
         multi_world_generator = MultiGenerator(generators=[random_world_generator, choice_world_generator])
         selected_world_generator = multi_world_generator if self.WORLD_GENERATOR == "multi" else (
             random_world_generator if self.WORLD_GENERATOR == "random" else (
                 choice_world_generator if self.WORLD_GENERATOR == "choice" else None))
-
         env = CoopGridWorld(generator=selected_world_generator, compute_reward=self.compute_reward,
                             xenia_lock=self.XENIA_LOCK, xenia_permanence=self.XENIA_PERMANENCE)
         self.env = env
         env.stats.number_communication_channels = self.NUMBER_COMMUNICATION_CHANNELS
         env.stats.size_vocabulary = self.SIZE_VOCABULARY
         env.stats.visible_positions = self.VISIBLE_POSITIONS
-        env.stats.recurrency = self.TIME_STEPS
+        env.stats.recurrency = self.LSTM_TIME_STEPS
         env.reset()
 
         policy_network = partial(create_policy_network, state_dim=env.stats.observation_dimension,
-                output_activation=self.actor_output_activation,
-                number_of_big_layers=self.NUMBER_OF_BIG_LAYERS, recurrent=self.RECURRENT,
-                layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE,
-                time_steps=self.TIME_STEPS, learning_rate=self.LEARNING_RATE,
-                size_vocabulary=self.SIZE_VOCABULARY,
-                number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS)
+                                 output_activation=self.actor_output_activation,
+                                 number_of_big_layers=self.NUMBER_OF_BIG_LAYERS, recurrent=self.RECURRENT,
+                                 layer_size=self.LAYER_SIZE, lstm_size=self.LSTM_SIZE,
+                                 time_steps=self.LSTM_TIME_STEPS, learning_rate=self.LEARNING_RATE,
+                                 size_vocabulary=self.SIZE_VOCABULARY,
+                                 number_communication_channels=self.NUMBER_COMMUNICATION_CHANNELS)
         value_network = partial(create_critic_network,
-                                state_dim=env.stats.observation_dimension,recurrent=self.RECURRENT,
+                                state_dim=env.stats.observation_dimension, recurrent=self.RECURRENT,
                                 output_dim=self.critic_output_dim(env=env), layer_size=self.LAYER_SIZE,
                                 lstm_size=self.LSTM_SIZE, learning_rate=self.LEARNING_RATE,
                                 number_of_big_layers=self.NUMBER_OF_BIG_LAYERS,
-                                time_steps=self.TIME_STEPS, agent_num=self.NUMBER_OF_AGENTS)
+                                time_steps=self.LSTM_TIME_STEPS, agent_num=self.NUMBER_OF_AGENTS)
 
         self.trainer = self.get_trainer(env=env, policy_network=policy_network, value_network=value_network)
         self.save()

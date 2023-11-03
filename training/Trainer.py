@@ -82,5 +82,5 @@ class Trainer(Protocol):
         return_, social_return = self.test(n_samples=10, render=render)
         self._loss_logger.add_values({TEST_RETURNS: return_, TEST_SOCIAL_RETURNS   : social_return})
         self._loss_logger.save(path="logger")
-        thread = Thread(target=plot_multiple, args=[self._run_name, self._loss_logger.all_smoothed()])
+        thread = Thread(target=plot_multiple, args=[self._run_name, self._loss_logger.all_smoothed(), self.epoch])
         thread.start()

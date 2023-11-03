@@ -161,8 +161,8 @@ agents only have time to try a single object before the episode is truncated.
 class ChoiceWorldGenerator(WorldGenerator):
     _grid_size: int = 10
     _number_of_objects_to_place_per_agent: int = 4
-    _number_of_agents: int = 2
     _max_time_step: int = 6
+    _number_of_agents: int
     _number_of_object_colors: int
 
     """
@@ -170,9 +170,10 @@ class ChoiceWorldGenerator(WorldGenerator):
         the overall number of colors. A random value in the inclusive interval of [min, max] will be sampled for each
         world instance. All of the colors will be equally frequent in the world instances.
     """
-    def __init__(self, seed: int, object_color_range: Tuple[int, int]):
+    def __init__(self, seed: int, object_color_range: Tuple[int, int], number_of_agents: int) -> None:
         random.seed(seed)
         self._number_of_object_colors = object_color_range[1]
+        self._number_of_agents = number_of_agents
 
     """
     see documentation of WorldGenerator above
@@ -190,29 +191,85 @@ class ChoiceWorldGenerator(WorldGenerator):
 
     def _spawn_agents(self, stats: Stats) -> AgentPositions:
         stats.number_of_agents = self._number_of_agents
-        agent_positions = {'0': (2, 2), '1': (7, 7)}
+        agent_positions = {'0': (2, 2), '1': (3, 8)}
+        if self._number_of_agents == 3:
+            agent_positions['2'] = (8, 4)
         return agent_positions
 
     def _place_objects(self, grid: np.ndarray, stats: Stats) -> np.ndarray:
         stats.number_of_objects = self._number_of_objects_to_place_per_agent * 2
         stats.number_of_used_colors = self._number_of_object_colors
         indexes_1 = [(1, 1), (1, 3), (3, 1), (3, 3)]
-        indexes_2 = [(5, 7), (7, 9), (7, 5), (9, 7)]
+        indexes_2 = [(1,8)]
+        indexes_3 = [(8,2)]
         used_colors = set()
         for x, y in indexes_1:
             object_color = random.randint(0, stats.number_of_used_colors - 1)
             grid[(x, y, object_color)] = 1
             used_colors.add(object_color)
-        mode = None
-        while mode not in used_colors:
-            mode = random.randrange(0, stats.number_of_used_colors + 0)
+        if len(used_colors) == 1:
+            mode_agent_2 = list(used_colors)[0]
+            mode_agent_3 = list(used_colors)[0]
+        else:
+            mode_agent_2, mode_agent_3 = None, None
+            while mode_agent_2 not in used_colors:
+                mode_agent_2 = random.randrange(0, stats.number_of_used_colors + 0)
+            if self._number_of_agents == 3:
+                while mode_agent_3 not in used_colors or mode_agent_3==mode_agent_2:
+                    mode_agent_3 = random.randrange(0, stats.number_of_used_colors + 0)
         for x, y in indexes_2:
-            if mode < stats.number_of_used_colors:
-                grid[(x, y, mode)] = 1
-            else:
-                raise NotImplementedError()
-                object_color = random.randint(0, stats.number_of_used_colors - 1)
-                grid[(x, y, object_color)] = 1
+            grid[(x, y, mode_agent_2)] = 1
+        if self._number_of_agents == 3:
+            for x, y in indexes_3:
+                grid[(x, y, mode_agent_3)] = 1
+        return grid
+
+    @property
+    def types(self) -> List[str]:
+        return ["chwg"]
+
+class ManhattanGenerator(WorldGenerator):
+    _grid_size: int = 6
+    _number_of_objects_to_place_per_agent: int = 4
+    _max_time_step: int = 6
+    _number_of_agents: int
+    _number_of_object_colors: int
+
+    """
+    number_of_object_colors:  Min and max of the number of colors that exist in a single world instance. Max equals
+        the overall number of colors. A random value in the inclusive interval of [min, max] will be sampled for each
+        world instance. All of the colors will be equally frequent in the world instances.
+    """
+    def __init__(self, seed: int, object_color_range: Tuple[int, int], number_of_agents: int) -> None:
+        random.seed(seed)
+        self._number_of_object_colors = object_color_range[1]
+        self._number_of_agents = number_of_agents
+
+    """
+    see documentation of WorldGenerator above
+    """
+    def __call__(self, last_stats: Stats) -> Tuple[Grid, AgentPositions, Stats, Type]:
+        stats = last_stats.new_stats_from_old_stats()
+        stats.values_per_field = self._number_of_object_colors
+        stats.time_step = 0
+        stats.max_time_step = self._max_time_step
+        stats.grid_size = self._grid_size
+        grid = np.zeros(shape=(stats.grid_size, stats.grid_size, stats.values_per_field))
+        grid_with_objects = self._place_objects(grid=grid, stats=stats)
+        agent_positions = self._spawn_agents(stats=stats)
+        return grid_with_objects, agent_positions, stats, self.types[0]
+
+    def _spawn_agents(self, stats: Stats) -> AgentPositions:
+        stats.number_of_agents = self._number_of_agents
+        agent_positions = {'0': (3, 3)}
+        return agent_positions
+
+    def _place_objects(self, grid: np.ndarray, stats: Stats) -> np.ndarray:
+        stats.number_of_objects = self._number_of_objects_to_place_per_agent * 2
+        stats.number_of_used_colors = self._number_of_object_colors
+        indexes = [(2,3), (3,2), (3,4), (4,3),(2,2), (2,4), (4,2), (4,4), (1,3), (3,1), (3,5), (5,3)]
+        for x, y in indexes:
+            grid[(x, y, 0)] = 1
         return grid
 
     @property
