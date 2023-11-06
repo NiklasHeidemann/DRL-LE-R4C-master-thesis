@@ -12,6 +12,7 @@ from training.SAC.SACagent import SACAgent
 
 SEED=12932
 NUMBER_SAMPLES = 100
+MAX_ATTEMPTS = 400
 BATCH_SIZE = 40
 TEST_SIZE = 0.2
 class TrainPredictGoal:
@@ -38,8 +39,9 @@ class TrainPredictGoal:
         communications = []
         type_of_returns = []
         finished_samples = 0
+        attempts = 0
         observation_arrays = environment_batcher.reset_all()
-        while finished_samples < NUMBER_SAMPLES:
+        while finished_samples < NUMBER_SAMPLES and attempts < MAX_ATTEMPTS:
             (_, new_observation_arrays, reward_arrays, done_mask),_, _ = agent.act_batched(
                 observation_arrays, deterministic=True, env_batcher=environment_batcher, include_social=False)
             usable_mask = np.bitwise_and(done_mask, np.sum(reward_arrays, axis=1)>0)
@@ -54,6 +56,7 @@ class TrainPredictGoal:
             batch_most_freq_color = [max(set(colors), key=colors.count) for colors in batch_colors]
             type_of_returns.extend(batch_most_freq_color)
             finished_samples += sum(usable_mask)
+            attempts += np.sum(done_mask)
             observation_arrays = environment_batcher.reset(mask=done_mask, observation_array=new_observation_arrays)
         return communications, type_of_returns
 

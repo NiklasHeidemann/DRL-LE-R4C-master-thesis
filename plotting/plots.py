@@ -20,7 +20,7 @@ def plot_returns(run_name: str, returns: Sequence[float], epoch:int, identifier:
 
     fig = px.line(x=x, y=returns, title=f"Smoothed {identifier} after {epoch} epochs", labels={"x":x_label, "y":f"Smoothed {identifier}"})
     # add shaded area for standard deviation
-    fig.add_trace(Scatter(x=x, y=[sum(returns)/len(returns)]*len(returns), name="mean", line=dict(color="black", dash="dash")))
+    #fig.add_trace(Scatter(x=x, y=[sum(returns)/len(returns)]*len(returns), name="mean", line=dict(color="black", dash="dash")))
 
     fig.write_image(f"plots/{run_name}_{identifier}.png")
     return Scatter(x=x, y=returns)

@@ -18,12 +18,12 @@ from training.Trainer import Trainer
 
 class PPOTrainer(Trainer):
 
-    def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
+    def __init__(self, environment, agent_ids: List[str], plotting:bool, state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, gae_lambda: float, epsilon:Optional[float],
                  social_influence_sample_size: int, social_reward_weight: float, tau: float,
                  gamma: float, alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
                  ppo_epsilon: float, steps_per_trajectory: int, kld_threshold: float,
-                 batch_size: int, model_path="model/"):
+                 batch_size: int, predict_goal_only_at_end: bool, model_path="model/"):
         self._env_batcher = EnvBatcher(env=environment, batch_size=env_parallel)
         replay_buffer = PPOExperienceReplayBuffer(state_dims=state_dim, action_dims=action_dim,
                                                         agent_number=len(agent_ids),
@@ -44,8 +44,9 @@ class PPOTrainer(Trainer):
             1: [PREDICTED_GOAL],
         }
         self._init(environment=environment, agent=agent, replay_buffer=replay_buffer, run_name=run_name,
-                   from_save=from_save,metrics=metrics)
+                   from_save=from_save,metrics=metrics,plotting=plotting)
         self._steps_per_trajectory = steps_per_trajectory
+        self._predict_goal_only_at_end = predict_goal_only_at_end
 
     @override
     def train(self, num_epochs: int, render: bool):
@@ -87,9 +88,15 @@ class PPOTrainer(Trainer):
             self._agent.update_target_weights()
             if self.epoch % 10 == 0:
                 self._every_few_epochs(render=render)
-            if self._environment.stats.number_communication_channels > 0 and self.epoch % 100 == 0:
+            if self._environment.stats.number_communication_channels > 0 and self.epoch % 100 == 0 and not self._predict_goal_only_at_end:
                 self._loss_logger.add_value(identifier=PREDICTED_GOAL,
                                             value=self._train_predict_goal(agent=self._agent))
             self.epoch += 1
             epoch_this_training += 1
+        print(self._loss_logger)
         print("training finished!")
+        if self._predict_goal_only_at_end:
+            self._loss_logger.add_value(identifier=PREDICTED_GOAL,
+                                        value=self._train_predict_goal(agent=self._agent))
+            print("goal prediction finished!")
+        return self._loss_logger

@@ -17,13 +17,14 @@ from training.ExperienceReplayBuffer import ExperienceReplayBuffer
 
 class Trainer(Protocol):
 
-    def _init(self, environment, agent: Agent, replay_buffer: ExperienceReplayBuffer, run_name:str, from_save: bool, metrics: Dict[int,List[str]]):
+    def _init(self, environment, agent: Agent, plotting: bool, replay_buffer: ExperienceReplayBuffer, run_name:str, from_save: bool, metrics: Dict[int,List[str]]):
         self._loss_logger = LossLogger(run_name=run_name)
         self._environment = environment
         self._agent = agent
         self._last_render_as_list: List[List[RenderSaveExtended]] = []
         self._replay_buffer = replay_buffer
         self._run_name = run_name
+        self._plotting = plotting
         self._train_predict_goal = TrainPredictGoal(environment=environment)
         if from_save:
             self.epoch = self._agent.load_models(name="", run_name=run_name)
@@ -82,5 +83,6 @@ class Trainer(Protocol):
         return_, social_return = self.test(n_samples=10, render=render)
         self._loss_logger.add_values({TEST_RETURNS: return_, TEST_SOCIAL_RETURNS   : social_return})
         self._loss_logger.save(path="logger")
-        thread = Thread(target=plot_multiple, args=[self._run_name, self._loss_logger.all_smoothed(), self.epoch])
-        thread.start()
+        if self._plotting:
+            thread = Thread(target=plot_multiple, args=[self._run_name, self._loss_logger.all_smoothed(), self.epoch])
+            thread.start()

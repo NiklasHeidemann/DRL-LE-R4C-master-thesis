@@ -20,7 +20,7 @@ from training.Trainer import Trainer
 class SACTrainer(Trainer):
     def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, max_replay_buffer_size: int, gamma: float, mov_alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
-                 social_reward_weight: float,
+                 social_reward_weight: float,plotting:bool,
                  social_influence_sample_size: int,epsilon:Optional[float],
                  batch_size: int, target_entropy: float, tau: float, batches_per_epoch: int,
                  environment_steps_per_epoch: int, pre_sampling_steps: int, model_path="model/"):
@@ -43,7 +43,7 @@ class SACTrainer(Trainer):
             3: [TEST_RETURNS, TEST_SOCIAL_RETURNS],
             1000: [RETURNS, N_AGENT_RETURNS(2), N_AGENT_RETURNS(3)]
         }
-        self._init(environment=environment, agent=agent, replay_buffer=replay_buffer,
+        self._init(environment=environment, agent=agent, plotting=plotting,replay_buffer=replay_buffer,
                    run_name=run_name, from_save=from_save, metrics=metrics)
         self._batch_size = batch_size
         self._agent_ids = agent_ids
@@ -51,7 +51,7 @@ class SACTrainer(Trainer):
         self._environment_steps_per_epoch = environment_steps_per_epoch
         self._pre_sampling_steps = pre_sampling_steps
 
-    def _env_step(self, observation_array, multitimer: Optional[MultiTimer], return_array: np.ndarray):
+    def _env_step(self, observation_array, return_array: np.ndarray):
         (actions_array, new_observation_array, reward_array, done), action_probs, _ = self._agent.act_batched(
             batched_state=observation_array, deterministic=False, env_batcher=self._env_batcher, include_social=True)
         self._replay_buffer.add_transition_batch({
@@ -132,14 +132,14 @@ class SACTrainer(Trainer):
                     print("training finished!")
                     return
                 observation_array, ret, done, action_probs_0 = self._env_step(
-                    observation_array=observation_array, multitimer=None, return_array=return_array
+                    observation_array=observation_array, return_array=return_array
                 )
                 steps += self._env_batcher.size
                 steps_total += self._env_batcher.size
 
             for _ in range(self._batches_per_epoch):
                 self.learn()
-
+        return self._loss_logger
     def learn(self) -> None:
         inputs = self._replay_buffer.sample_batch()
         _, actor_metrics = self._agent.train_step_actor(inputs)

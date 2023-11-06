@@ -26,6 +26,7 @@ the config.
 class Config(Protocol):
     name: str = None
     VISIBLE_POSITIONS: Callable = None
+    PLOTTING: bool = True
 
     # training
     EPOCHS = 2000
@@ -79,10 +80,10 @@ class Config(Protocol):
 
     def __call__(self, catched=True):
         if not catched:
-            self._catched_call()
+            return self._catched_call()
         else:
             try:
-                self._catched_call()
+                return self._catched_call()
             except Exception as e:
                 print(e)
                 with open(f"error_{self.name}_error.txt", "w") as f:
@@ -136,7 +137,9 @@ class Config(Protocol):
 
         self.trainer = self.get_trainer(env=env, policy_network=policy_network, value_network=value_network)
         self.save()
-        return self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
+        tr_result= self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
+        print(tr_result)
+        return tr_result
 
     @abstractmethod
     def save(self):
@@ -172,7 +175,7 @@ class SACConfig(Config):
         return SACTrainer(environment=env, from_save=self.FROM_SAVE,
                           agent_ids=env.stats.agent_ids,
                           state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
-                          run_name=self.name,
+                          run_name=self.name,plotting=self.PLOTTING,
                           max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
                           social_reward_weight=self.SOCIAL_REWARD_WEIGHT,
                           social_influence_sample_size=self.SOCIAL_INFLUENCE_SAMPLE_SIZE,
@@ -198,6 +201,7 @@ class PPOConfig(Config):
     KLD_THRESHHOLD = 0.05
     STEPS_PER_TRAJECTORIE = 1000
     ACTOR_OUTPUT_ACTIVATION = "log_softmax"
+    PREDICT_GOAL_ONLY_AT_END: bool = False
 
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
@@ -212,8 +216,8 @@ class PPOConfig(Config):
 
     @override
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network):
-        return PPOTrainer(environment=env, from_save=self.FROM_SAVE,
-                          agent_ids=env.stats.agent_ids,
+        return PPOTrainer(environment=env, from_save=self.FROM_SAVE,predict_goal_only_at_end=self.PREDICT_GOAL_ONLY_AT_END,
+                          agent_ids=env.stats.agent_ids,plotting=self.PLOTTING,
                           state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
                           run_name=self.name,
                           actor_network_generator=policy_network,

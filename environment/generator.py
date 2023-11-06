@@ -161,7 +161,7 @@ agents only have time to try a single object before the episode is truncated.
 class ChoiceWorldGenerator(WorldGenerator):
     _grid_size: int = 10
     _number_of_objects_to_place_per_agent: int = 4
-    _max_time_step: int = 6
+    _max_time_step: int = 4
     _number_of_agents: int
     _number_of_object_colors: int
 

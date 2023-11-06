@@ -8,7 +8,7 @@ from runconfig import make_config
 def wrapper_exp_2(com_alpha: float, mov_alpha:float, learning_rate_exp: float, batch_size_exp: int, layer_size: int, gamma_inverse_exp: float):
     name = f"hpo_exp_2_ca{com_alpha}_ma{mov_alpha}_lr{learning_rate_exp}_bs{batch_size_exp}_ls{layer_size}_gi{gamma_inverse_exp}"
     seeds = [19,20,21]
-    configs = [make_config(name=name, algo="ppo", special_vars={"EPOCHS": 2000, "SEED":seed,
+    configs = [make_config(name=f"{name}_{seed}", algo="ppo", special_vars={"EPOCHS": 2, "SEED":seed, "PLOTTING": False, "PREDICT_GOAL_ONLY_AT_END":True,
                                                                 "COM_ALPHA":com_alpha, **medium_choice,
                                                                 "LEARNING_RATE":10**learning_rate_exp, "BATCH_SIZE":int(2**batch_size_exp),
                                                                 "MOV_ALPHA":mov_alpha, "LAYER_SIZE":layer_size,
