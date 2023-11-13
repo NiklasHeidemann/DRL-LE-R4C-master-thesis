@@ -205,8 +205,8 @@ class ChoiceWorldGenerator(WorldGenerator):
         used_colors = set()
         for x, y in indexes_1:
             object_color = random.randint(0, stats.number_of_used_colors - 1)
-            if stats.number_of_used_colors>=len(indexes_1) and object_color in used_colors:
-                continue
+            while stats.number_of_used_colors>=len(indexes_1) and object_color in used_colors:
+                object_color = random.randint(0, stats.number_of_used_colors - 1)
             grid[(x, y, object_color)] = 1
             used_colors.add(object_color)
         if len(used_colors) == 1:

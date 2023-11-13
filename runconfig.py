@@ -32,7 +32,7 @@ class Config(Protocol):
     EPOCHS = 2000
     SEED = 18
     ENV_PARALLEL = 32
-    FROM_SAVE = False
+    FROM_SAVE = True
 
     # Agent.py
     COM_ALPHA = -0.0
