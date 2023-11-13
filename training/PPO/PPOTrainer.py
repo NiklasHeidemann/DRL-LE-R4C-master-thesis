@@ -93,7 +93,6 @@ class PPOTrainer(Trainer):
                                             value=self._train_predict_goal(agent=self._agent))
             self.epoch += 1
             epoch_this_training += 1
-        print(self._loss_logger)
         print("training finished!")
         if self._predict_goal_only_at_end:
             self._loss_logger.add_value(identifier=PREDICTED_GOAL,
