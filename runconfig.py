@@ -61,7 +61,7 @@ class Config(Protocol):
     WORLD_GENERATOR = "random"  # multi or random or choice
     GRID_SIZE_RANGE = (12, 16)
     MAX_TIME_STEP = 30
-    NUMBER_OF_AGENTS = 3
+    NUMBER_OF_AGENTS = 2
     COMMUNISM = False
     AGENT_DROPOUT_PROBS = 0  # 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
     NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6)

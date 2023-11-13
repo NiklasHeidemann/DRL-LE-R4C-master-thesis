@@ -33,16 +33,17 @@ thompson_sampling = {"EPSILON": None, "COM_ALPHA": 0.01}
 epsilon_sampling = {"EPSILON": 0.1, "COM_ALPHA": 0.}
 
 medium_choice = {**choice_env(8,2),"NUMBER_COMMUNICATION_CHANNELS": 2}
+easy_choice = {**choice_env(4,2),"NUMBER_COMMUNICATION_CHANNELS": 1}
 
 exp_1_le_in_choice = [
-    #make_config("exp_1_a_no_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(4,2),**epsilon_sampling, "EPOCHS": 1000}),
+    make_config("exp_1_a_no_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(4,2),**epsilon_sampling, "EPOCHS": 1000}),
     #make_config("exp_1_b_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**epsilon_sampling}),
     #make_config("exp_1_c_com_hard_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(12,2),**epsilon_sampling}),
     #make_config("exp_1_d_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling}),
     #make_config("exp_1_e_com_hard_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(12,2),**thompson_sampling}),
     #make_config("exp_1_f_no_com_hard_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(12,2),**thompson_sampling, "EPOCHS": 1000})
-    make_config("exp_1_g_com_medium_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(8,2),**thompson_sampling, "EPOCHS": 3000}),
-    make_config("exp_1_h_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),"EPSILON": 0.05, "COM_ALPHA": 0.}),
+    #make_config("exp_1_g_com_medium_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(8,2),**thompson_sampling, "EPOCHS": 3000}),
+    #make_config("exp_1_h_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),"EPSILON": 0.05, "COM_ALPHA": 0.}),
 ]
 exp_2_le_in_random = [
     make_config("exp_2_a_no_com_very_easy", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 0,  **random_env_by_difficulty(communism=True, number_of_agents=2, difficulty="very easy")}),
