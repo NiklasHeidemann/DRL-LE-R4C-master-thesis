@@ -30,9 +30,9 @@ class Config(Protocol):
 
     # training
     EPOCHS = 2000
-    SEED = 18
+    SEED = 25
     ENV_PARALLEL = 32
-    FROM_SAVE = True
+    FROM_SAVE = False
 
     # Agent.py
     COM_ALPHA = -0.0

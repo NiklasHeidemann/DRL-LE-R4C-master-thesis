@@ -59,8 +59,8 @@ class Trainer(Protocol):
                     render_save.append(self._get_current_render_save(observation_array=observation_array, action_probs=action_probs_or_log_probs))
                 (actions_array, new_observation_array, reward_array, done), action_probs_or_log_probs = self._agent.act(
                     observation_array, deterministic=True, env=self._environment)
-                return_ += sum(reward_array)
-                social_reward += sum(self._agent.compute_social_reward(observation_prime=np.expand_dims(new_observation_array,axis=0),deterministic=True))
+                return_ += np.average(reward_array)
+                social_reward += np.average(self._agent.compute_social_reward(observation_prime=np.expand_dims(new_observation_array,axis=0),deterministic=True))
                 if done:
                     returns.append(return_)
                     social_returns.append(social_reward)
