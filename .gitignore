@@ -5,6 +5,7 @@ logs
 logger
 saves/*
 runconfigs/*
+runconfigs
 logger/*
 nohup.out
 # Created by https://www.toptal.com/developers/gitignore/
