@@ -6,7 +6,7 @@ ACTIONS = ["HOLD", "UP", "DOWN", "LEFT", "RIGHT"]
 ENV_TYPE = int
 AgentID = str
 
-RENDER = True
+RENDER = False
 
 def visible_positions_13(x_y):
     return [
