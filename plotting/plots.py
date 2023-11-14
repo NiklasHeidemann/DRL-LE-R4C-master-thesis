@@ -16,7 +16,7 @@ def plot_returns(run_name: str, returns: Sequence[float], epoch:int, identifier:
     plt.close()"""
 
     # set the x label to specify how many epochs are between each x value
-    x_label = f"epoch\nvalues every {len(returns)//epoch} epochs" if len(returns) < epoch and epoch>0    else "epoch"
+    x_label = f"epoch\nvalues every {(len(returns)+2)//epoch} epochs" if len(returns) < epoch and epoch>0    else "epoch"
 
     fig = px.line(x=x, y=returns, title=f"Smoothed {identifier} after {epoch} epochs", labels={"x":x_label, "y":f"Smoothed {identifier}"})
     # add shaded area for standard deviation

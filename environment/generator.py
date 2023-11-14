@@ -204,11 +204,12 @@ class ChoiceWorldGenerator(WorldGenerator):
         indexes_3 = [(8,2)]
         used_colors = set()
         for x, y in indexes_1:
-            object_color = random.randint(0, stats.number_of_used_colors - 1)
+            object_color = random.randrange(0, stats.number_of_used_colors)
             while stats.number_of_used_colors>=len(indexes_1) and object_color in used_colors:
-                object_color = random.randint(0, stats.number_of_used_colors - 1)
+                object_color = random.randrange(0, stats.number_of_used_colors)
             grid[(x, y, object_color)] = 1
             used_colors.add(object_color)
+        assert len(used_colors) == 4
         if len(used_colors) == 1:
             mode_agent_2 = list(used_colors)[0]
             mode_agent_3 = list(used_colors)[0]
@@ -217,12 +218,12 @@ class ChoiceWorldGenerator(WorldGenerator):
             agent_2_gets_guaranteed_fit = self._number_of_agents==2 or random.random() < 2/3
             agent_3_gets_guaranteed_fit = not agent_2_gets_guaranteed_fit or random.random() < 0.5
             while mode_agent_2 not in used_colors:
-                mode_agent_2 = random.randrange(0, stats.number_of_used_colors + 0)
+                mode_agent_2 = random.randrange(0, stats.number_of_used_colors)
                 if not agent_2_gets_guaranteed_fit:
                     break
             if self._number_of_agents == 3:
                 while mode_agent_3 not in used_colors or mode_agent_3==mode_agent_2:
-                    mode_agent_3 = random.randrange(0, stats.number_of_used_colors + 0)
+                    mode_agent_3 = random.randrange(0, stats.number_of_used_colors)
                     if not agent_3_gets_guaranteed_fit:
                         break
         assert mode_agent_2 in used_colors or mode_agent_3 in used_colors
