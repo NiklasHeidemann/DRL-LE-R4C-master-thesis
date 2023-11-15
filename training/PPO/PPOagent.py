@@ -67,7 +67,7 @@ class PPOAgent(Agent):
         gradients = tape.gradient(loss, self._actor.trainable_variables)
         self._actor.optimizer.apply_gradients(zip(gradients, self._actor.trainable_variables))
 
-        log_ratio = batch[PROB_OLD_KEY] - log_prob_current
+        log_ratio = prob_old - log_prob_current
         kld = tf.math.reduce_mean((tf.math.exp(log_ratio) - 1) - log_ratio)
         early_stopping = kld > self._kld_threshold
         return early_stopping, {ACTOR_LOSS: loss, ENTROPY: mov_entropy_loss, COM_ENTROPY: com_entropy_loss, KLD: kld}

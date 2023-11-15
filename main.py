@@ -3,7 +3,7 @@ from typing import Any, Dict
 import matplotlib
 
 from domain import visible_positions_13
-from experiments import exp_1_le_in_choice
+from experiments import exp_4_le_in_choice
 from runconfig import make_config
 
 matplotlib.use("agg")
@@ -23,6 +23,6 @@ runconfigs = [
 #make_config("com", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 2}),
 make_config("no_com", "ppo", {"NUMBER_COMMUNICATION_CHANNELS": 0}),
 ]
-runconfigs = exp_1_le_in_choice
+runconfigs = exp_4_le_in_choice
 for config in runconfigs:
     config(catched=False)
