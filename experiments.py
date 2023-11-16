@@ -2,11 +2,12 @@
 from runconfig import make_config
 
 
-def choice_env(num_colors: int, num_agents: int):
+def choice_env(num_colors: int, num_agents: int, communism: bool):
  return {
     "WORLD_GENERATOR": "choice",
     "OBJECT_COLOR_RANGE": (None, num_colors),
      "NUMBER_OF_AGENTS": num_agents,
+     "COMMUNISM"      : communism,
  }
 def random_env(num_colors: [int,int], xenia_lock: bool, xenia_permanence: bool, communism: bool, number_of_agents: int, grid_size_range: [int,int]):
  return {
@@ -37,7 +38,10 @@ easy_choice = {**choice_env(4,2),"NUMBER_COMMUNICATION_CHANNELS": 1}
 
 exp_4_le_in_choice = [
 
-    #make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":32}),
+    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":33}),
     #make_config("exp_4_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
     #make_config("exp_4_b_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
     #make_config("exp_4_c_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":32}),
