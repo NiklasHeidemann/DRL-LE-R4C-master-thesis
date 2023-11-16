@@ -64,8 +64,8 @@ class SACAgent(Agent):
         q_r_mean = tf.math.reduce_sum(action_probs * q_r, axis=1)
         targets = tf.reshape(rewards, q_r_mean.shape) + self._gamma * (
                 1 - tf.repeat(dones, axis=0, repeats=len(self._agent_ids))) * q_r_mean
-        loss_1, abs_11, abs_12 = self._critic_update(self._critic_1, flattened_states, actions, targets)
-        loss_2, abs_21, abs_22 = self._critic_update(self._critic_2, flattened_states, actions, targets)
+        loss_1 = self._critic_update(self._critic_1, flattened_states, actions, targets)
+        loss_2 = self._critic_update(self._critic_2, flattened_states, actions, targets)
         entropy = -tf.reduce_mean(tf.reduce_sum((action_probs * log_probs)[:, :len(ACTIONS)], axis=1))
         com_entropy = -tf.reduce_mean(tf.reduce_sum((action_probs * log_probs)[:, len(ACTIONS):], axis=1))
         metrics = {CRITIC_LOSS: tf.add(loss_1, loss_2), LOG_PROBS: log_probs, ENTROPY: entropy,
@@ -81,7 +81,7 @@ class SACAgent(Agent):
             loss = 0.5 * self._mse(targets, q)
         gradients = tape.gradient(loss, critic.trainable_variables)
         critic.optimizer.apply_gradients(zip(gradients, critic.trainable_variables))
-        return loss, tf.math.abs(targets - q), tf.math.abs(q - targets)
+        return loss
 
     @override
     @tf.function
@@ -106,23 +106,6 @@ class SACAgent(Agent):
                    MAX_Q_VALUES: tf.reduce_mean(tf.reduce_max(q, axis=1))}
         return False, metrics
 
-    @tf.function
-    def train_step_single_actor(self, index: int,agent_states:tf.Tensor,q:tf.Tensor)->Dict[str,float]:
-            with tf.GradientTape() as tape:
-                _, log_probs, action_probs = self._action_sampler(
-                    states=tf.reshape(agent_states, shape=(
-                        self._batch_size, self._environment.stats.recurrency,
-                        self._environment.stats.observation_dimension)),
-                generator_index=index)
-                entropy_part = tf.concat(
-                    [self._mov_alpha * log_probs[:, :len(ACTIONS)], self._com_alpha * log_probs[:, len(ACTIONS):]], axis=1)
-                sum_part = tfm.reduce_sum(action_probs * (entropy_part - q), axis=1)
-                loss = tfm.reduce_mean(sum_part)
-            gradients = tape.gradient(loss, self._actor.trainable_variables)
-            self._actor.optimizer.apply_gradients(zip(gradients, self._actor.trainable_variables))
-            metrics = {ACTOR_LOSS: loss, Q_VALUES: tf.reduce_mean(q),
-                       MAX_Q_VALUES: tf.reduce_mean(tf.reduce_max(q, axis=1))}
-            return metrics
 
     def train_step_temperature(self, states):
         action_probs = self._actor(tf.reshape(states, shape=(

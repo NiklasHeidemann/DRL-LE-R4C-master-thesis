@@ -238,6 +238,9 @@ class ChoiceWorldGenerator(WorldGenerator):
     def types(self) -> List[str]:
         return ["chwg"]
 
+"""
+Only used to create a screenshot for visualisizing which cells are visible to the agents
+"""
 class ManhattanGenerator(WorldGenerator):
     _grid_size: int = 6
     _number_of_objects_to_place_per_agent: int = 4

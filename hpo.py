@@ -43,8 +43,8 @@ def register_previous(optimizer: BayesianOptimization):
     return optimizer
 def wrapper_exp_2(com_alpha: float, mov_alpha:float, learning_rate_exp: float, batch_size_exp: int, layer_size: int, gamma_inverse_exp: float):
     name = f"hpo_exp_3_ca{com_alpha}_ma{mov_alpha}_lr{learning_rate_exp}_bs{batch_size_exp}_ls{layer_size}_gi{gamma_inverse_exp}"
-    seeds = [20,21]
-    configs = [make_config(name=f"{name}_{seed}", algo="ppo", special_vars={"EPOCHS": 2011, "SEED":seed, "PLOTTING": True,"FROM_SAVE":True, "PREDICT_GOAL_ONLY_AT_END":False,
+    seeds = [21]
+    configs = [make_config(name=f"{name}_{seed}", algo="ppo", special_vars={"EPOCHS": 3000, "SEED":seed, "PLOTTING": True,"FROM_SAVE":True, "PREDICT_GOAL_ONLY_AT_END":False,
                                                                 "COM_ALPHA":com_alpha, **easy_choice,
                                                                 "LEARNING_RATE":10**learning_rate_exp, "BATCH_SIZE":int(2**batch_size_exp),
                                                                 "MOV_ALPHA":mov_alpha, "LAYER_SIZE":int(layer_size),

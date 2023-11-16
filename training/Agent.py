@@ -3,13 +3,11 @@ from typing import List, Tuple, Dict, Optional
 
 import numpy as np
 import tensorflow as tf
-from scipy.special import kl_div
 from typing_extensions import Protocol
 
-from domain import ACTIONS
 from environment.envbatcher import EnvBatcher
 from training.ActionSampler import ActionSampler
-from training.SocialRewardComputer import SocialRewardComputer
+from language.SocialRewardComputer import SocialRewardComputer
 
 EarlyStopping = bool
 

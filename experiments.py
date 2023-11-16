@@ -36,10 +36,12 @@ medium_choice = {**choice_env(8,2),"NUMBER_COMMUNICATION_CHANNELS": 2}
 easy_choice = {**choice_env(4,2),"NUMBER_COMMUNICATION_CHANNELS": 1}
 
 exp_4_le_in_choice = [
-    make_config("exp_4_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
-    make_config("exp_4_b_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
-    make_config("exp_4_c_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":32}),
-    make_config("exp_4_d_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":33}),
+
+    #make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    #make_config("exp_4_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    #make_config("exp_4_b_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    #make_config("exp_4_c_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":32}),
+    #make_config("exp_4_d_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":33}),
     #make_config("exp_1_a_no_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(4,2),**epsilon_sampling, "EPOCHS": 1000}),
     #make_config("exp_1_b_com_easy_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**epsilon_sampling, "EPOCHS":4000}),
     #make_config("exp_1_c_com_hard_eps", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(12,2),**epsilon_sampling}),
