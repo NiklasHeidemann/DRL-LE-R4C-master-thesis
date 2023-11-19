@@ -33,15 +33,31 @@ def random_env_by_difficulty(communism: bool, number_of_agents: int, difficulty:
 thompson_sampling = {"EPSILON": None, "COM_ALPHA": 0.001}
 epsilon_sampling = {"EPSILON": 0.1, "COM_ALPHA": 0.}
 
-medium_choice = {**choice_env(8,2),"NUMBER_COMMUNICATION_CHANNELS": 2}
-easy_choice = {**choice_env(4,2),"NUMBER_COMMUNICATION_CHANNELS": 1}
+medium_choice = {**choice_env(8,2, True),"NUMBER_COMMUNICATION_CHANNELS": 2}
+easy_choice = {**choice_env(4,2, True),"NUMBER_COMMUNICATION_CHANNELS": 1}
+exp_6 = [
+    make_config("exp_6_a_com_r_easy_thomp", "ppo", {**random_env_by_difficulty(True,2,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_6_b_no_com_r_easy_thomp", "ppo", {**random_env_by_difficulty(True,2,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_6_c_com_r_3c_easy_thomp", "ppo", {**random_env_by_difficulty(True,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_6_d_no_com_r_3c_easy_thomp", "ppo", {**random_env_by_difficulty(True,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_6_e_com_r_3v_easy_thomp", "ppo", {**random_env_by_difficulty(False,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_6_f_no_com_r_3v_easy_thomp", "ppo", {**random_env_by_difficulty(False,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    make_config("exp_6_a2_com_r_easy_thomp", "ppo", {**random_env_by_difficulty(True,2,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    make_config("exp_6_b2_no_com_r_easy_thomp", "ppo", {**random_env_by_difficulty(True,2,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    make_config("exp_6_c2_com_r_3c_easy_thomp", "ppo", {**random_env_by_difficulty(True,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    make_config("exp_6_d2_no_com_r_3c_easy_thomp", "ppo", {**random_env_by_difficulty(True,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    make_config("exp_6_e2_com_r_3v_easy_thomp", "ppo", {**random_env_by_difficulty(False,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    make_config("exp_6_f2_no_com_r_3v_easy_thomp", "ppo", {**random_env_by_difficulty(False,3,"very easy"),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    ]
 
 exp_4_le_in_choice = [
 
-    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
-    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
-    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":32}),
-    make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":33}),
+    make_config("exp_4_o_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(4,2, False),**thompson_sampling, "EPOCHS": 1000, "SEED":30}),
+    make_config("exp_5_o_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 0, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 1000, "SEED":30}),
+    #make_config("exp_5_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
+    #make_config("exp_5_b_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
+    #make_config("exp_5_c_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":32}),
+    #make_config("exp_5_d_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(5,3, False),**thompson_sampling, "EPOCHS": 10000, "SEED":33}),
     #make_config("exp_4_a_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":30}),
     #make_config("exp_4_b_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":31}),
     #make_config("exp_4_c_com_easy_thomp", "ppo", {"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2),**thompson_sampling, "EPOCHS": 10000, "SEED":32}),
