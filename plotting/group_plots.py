@@ -9,9 +9,9 @@ from plotly.subplots import make_subplots
 from utils.loss_logger import ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, \
     AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD, TEST_SOCIAL_RETURNS
 
-ROOT_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/exp_1")
-SAVE_PATH = Path("/home/nemo/pycharmProjects/adversarial/saves/all")
-KEYS = [ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD, TEST_SOCIAL_RETURNS]
+ROOT_PATH = Path("/home/nemo/pycharmProjects/adversarial/experiments/exp4")
+SAVE_PATH = Path("/home/nemo/pycharmProjects/adversarial/experiments/exp4")
+KEYS = [TEST_RETURNS]#[ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD, TEST_SOCIAL_RETURNS]
 
 def group_image():
     for key in KEYS:
