@@ -5,6 +5,7 @@ from typing import Tuple, List, Dict
 
 import numpy as np
 import pygame
+from PIL import Image
 
 from domain import ACTIONS, RENDER, RenderSave, RenderSaveExtended
 from environment.env import _map_communication_to_str
@@ -12,7 +13,12 @@ from environment.env import _map_communication_to_str
 if RENDER:
     window = pygame.display.set_mode((1000, 500))
     pygame.font.init()
+    image_paths: List[str] = ["./environment/images/garden.png", "./environment/images/music.png",
+                               "./environment/images/ocean.png", "./environment/images/thesis.png",
+                               "./environment/images/volcano.png"]
+    loaded_images = [pygame.image.load(image_path) for image_path in image_paths]
 
+SAC = False
 
 def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index: int,
            max_q_value: Dict[str, Tuple[float, float]], log_dir: str):
@@ -38,8 +44,8 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
     for id, position in agent_positions.items():
         if position is not None:
             row, col = position
-            text_field = my_font.render(id, True, background_color)
-            window.blit(text_field, (col * cell_size + 10, row * cell_size + 10))
+            textfield = my_font.render(id, True, background_color)
+            window.blit(textfield, (col * cell_size + 10, row * cell_size + 10))
 
     pygame.draw.rect(surface=window, color=textfield_color, rect=(500, 0, 500, 500))
     text_field = my_font.render(f"timestep:     {timestep}", True, background_color)
@@ -52,15 +58,18 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
             f"com:     {_map_communication_to_str(last_communication[id]) if len(last_communication[id]) > 0 else ''}",
             True, background_color)
         window.blit(text_field, (550, (index + 1) * 100 + 40))
-        text_field = my_font.render("max_q_val:   {:.2f}".format(max_q_value[int(id)][0]), True, background_color)
+        name = "max q" if SAC else "state value"
+        text_field = my_font.render(name+":   {:.2f}".format(max_q_value[int(id)][0]), True, background_color)
         window.blit(text_field, (550, (index + 1) * 100 + 60))
-        q_value_index = max_q_value[int(id)][1]
-        best_act = ACTIONS[q_value_index] if q_value_index < len(ACTIONS) else "com"
-        text_field = my_font.render(f"best_act:   {best_act}", True, background_color)
-        window.blit(text_field, (550, (index + 1) * 100 + 80))
+        if SAC:
+            q_value_index = max_q_value[int(id)][1]
+            best_act = ACTIONS[q_value_index] if q_value_index < len(ACTIONS) else "com"
+            text_field = my_font.render(f"best action:   {best_act}", True, background_color)
+            window.blit(text_field, (550, (index + 1) * 100 + 80))
         for action_index in range(len(ACTIONS)):
+            prob = action_probs[index][action_index] if 0<=action_probs[index][action_index] else np.exp(action_probs[index][action_index])
             text_field = my_font.render(
-                f"{ACTIONS[action_index]}:     {'{:.2f}'.format(action_probs[index][action_index])}", True,
+                f"{ACTIONS[action_index]}:     {'{:.2f}'.format(prob)}", True,
                 background_color)
             window.blit(text_field, (750, (index + 1) * 100 + 20 + action_index * 20))
     pygame.display.update()
@@ -83,11 +92,10 @@ def render_permanently(render_saves_as_list: List[List[RenderSaveExtended]]) -> 
     while True:
         time.sleep(2)
         if len(render_saves_as_list) > 0:
-            episode = render_saves_as_list[0]
+            episode = render_saves_as_list.pop(0)
             render_episode(episode, str(counter))
             counter += 1
-            if len(render_saves_as_list) > 1:
-                render_saves_as_list.pop(0)
+
 
 
 def clean_logs():

@@ -30,7 +30,7 @@ class SACAgent(Agent):
                    critic_network_generator=critic_network_generator,
                    gamma=gamma, tau=tau, mov_alpha=mov_alpha, com_alpha=com_alpha, model_path=model_path, seed=seed)
 
-    def _get_max_q_value(self, states):
+    def get_values(self, states):
         reshaped_states = tf.reshape(np.array(states), shape=(
             1, self._environment.stats.recurrency,
             self._environment.stats.observation_dimension * len(self._agent_ids)))

@@ -46,6 +46,9 @@ class Agent(Protocol):
         self._critic_2 = critic_network_generator()
         self._critic_1_t = critic_network_generator()
         self._critic_2_t = critic_network_generator()
+        # plot actor and critic_1
+        #tf.keras.utils.plot_model(self._actor, to_file='sac_actor.png', show_shapes=True, show_layer_names=False, show_layer_activations=True)
+        #tf.keras.utils.plot_model(self._critic_1, to_file='sac_critic.png', show_shapes=True, show_layer_names=False, show_layer_activations=True)
         self._weight_init()
         self._generators = tf.random.Generator.from_seed(seed=seed).split(count=len(agent_ids))
         self._action_sampler = ActionSampler(generators=self._generators, actor_uses_log_probs=actor_uses_log_probs,

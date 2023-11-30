@@ -163,7 +163,7 @@ class SACConfig(Config):
     ACTOR_OUTPUT_ACTIVATION = "softmax"
     ENVIRONMENT_STEPS_PER_EPOCH = 500
     BATCHES_PER_EPOCH = 8
-    PRE_SAMPLING_STEPS = 1000
+    PRE_SAMPLING_STEPS = 10000
     TARGET_ENTROPY = 1.
 
     def __init__(self, params: Dict[str, Any]):
@@ -195,11 +195,18 @@ class SACConfig(Config):
     def critic_output_dim(self, env: CoopGridWorld)->int:
         return env.stats.action_dimension * self.NUMBER_OF_AGENTS
 
+    @override
+    def save(self):
+        attributes = {key: str(getattr(self, key)) for key in self.__dir__() if not key.startswith("_")}
+        with open(f"runconfigs/{self.name}.json", "w") as file:
+            json.dump(attributes,file)
+
+
 class PPOConfig(Config):
     PPO_EPSILON = 0.2
     GAE_LAMBDA = 0.95
     KLD_THRESHHOLD = 0.05
-    STEPS_PER_TRAJECTORIE = 1000
+    STEPS_PER_EPOCH = 1000
     ACTOR_OUTPUT_ACTIVATION = "log_softmax"
     PREDICT_GOAL_ONLY_AT_END: bool = False
 
@@ -228,7 +235,7 @@ class PPOConfig(Config):
                           env_parallel=self.ENV_PARALLEL, batch_size=self.BATCH_SIZE,
                           alpha=self.MOV_ALPHA,
                           gamma=self.GAMMA, com_alpha=self.COM_ALPHA, epsilon=self.EPSILON,
-                          steps_per_trajectory=self.STEPS_PER_TRAJECTORIE, kld_threshold=self.KLD_THRESHHOLD,
+                          steps_per_trajectory=self.STEPS_PER_EPOCH, kld_threshold=self.KLD_THRESHHOLD,
                           tau=self.TAU, ppo_epsilon=self.PPO_EPSILON)
     @property
     def actor_output_activation(self) -> str:

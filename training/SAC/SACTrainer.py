@@ -1,3 +1,4 @@
+import random
 from threading import Thread
 from typing import List, Dict, Optional
 
@@ -94,7 +95,7 @@ class SACTrainer(Trainer):
             self._extend_render_save(render_save=render_save, action_probs=np.zeros(
                 shape=(len(self._agent_ids), self._environment.stats.action_dimension)),
                                      observation_array=observation_array[0])
-        if epoch_array[0] % (self._env_batcher.size * 100) == 0 and done_mask[0]:
+        if epoch_array[0] % (self._env_batcher.size * 100) == 0 or done_mask[0] and random.random() < 0.1:
             self._every_few_epochs(render=render)
         return observation_array, epoch_array, return_array
 
