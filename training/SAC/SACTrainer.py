@@ -21,7 +21,7 @@ from training.Trainer import Trainer
 class SACTrainer(Trainer):
     def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, max_replay_buffer_size: int, gamma: float, mov_alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,
-                 social_reward_weight: float,plotting:bool,
+                 social_reward_weight: float,plotting:bool, learn_temperature: bool,
                  social_influence_sample_size: int,epsilon:Optional[float],
                  batch_size: int, target_entropy: float, tau: float, batches_per_epoch: int,
                  environment_steps_per_epoch: int, pre_sampling_steps: int, model_path="model/"):
@@ -48,6 +48,7 @@ class SACTrainer(Trainer):
                    run_name=run_name, from_save=from_save, metrics=metrics)
         self._batch_size = batch_size
         self._agent_ids = agent_ids
+        self._learn_temperature = learn_temperature
         self._batches_per_epoch = batches_per_epoch
         self._environment_steps_per_epoch = environment_steps_per_epoch
         self._pre_sampling_steps = pre_sampling_steps
@@ -151,7 +152,8 @@ class SACTrainer(Trainer):
         critic_metrics = self._agent.train_step_critic(
             {key: tf.reshape(input, shape=target_shapes[key]) for key, input in inputs.items()}
         )
-        # self._agent.train_step_temperature(states)
+        if self._learn_temperature:
+            self._agent.train_step_temperature(inputs[STATE_KEY])
         self._agent.update_target_weights()
         self._loss_logger.add_aggregatable_values(critic_metrics)
         self._loss_logger.add_aggregatable_values(actor_metrics)

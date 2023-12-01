@@ -32,5 +32,7 @@ if __name__ == "__main__":
     seed_names = ["seed=30", "seed=31", "seed=32", "seed=33"]
     #plot_experiment_4(names=["exp_4_a_com_easy_thomp", "exp_4_b_com_easy_thomp", "exp_4_c_com_easy_thomp", "exp_4_d_com_easy_thomp"],baselines=[0.25,0.25,None],dir="exp4",real_names=seed_names)
     #plot_experiment_4(names=["exp_5_a_com_easy_thomp", "exp_5_b_com_easy_thomp", "exp_5_c_com_easy_thomp", "exp_5_d_com_easy_thomp"],baselines=[1/3,0.2,None],dir="exp5",real_names=seed_names)
-    plot_experiment_4(names=["exp_6_a_com_r_easy_thomp", "exp_6_b_no_com_r_easy_thomp", "exp_6_c_com_r_3c_easy_thomp", "exp_6_d_no_com_r_3c_easy_thomp", "exp_6_e_com_r_3v_easy_thomp","exp_6_f_no_com_r_3v_easy_thomp"],baselines=[None,0.25,None],dir="exp6",
-                      real_names=["Com., 2 agents", "No com., 2 agents", "Com., 3 agents, coop", "No com., 3 agents, coop", "Com., 3 agents, versus", "No com., 3 agents, versus"])
+    #plot_experiment_4(names=["exp_6_a_com_r_easy_thomp", "exp_6_b_no_com_r_easy_thomp", "exp_6_c_com_r_3c_easy_thomp", "exp_6_d_no_com_r_3c_easy_thomp", "exp_6_e_com_r_3v_easy_thomp","exp_6_f_no_com_r_3v_easy_thomp"],baselines=[None,0.25,None],dir="exp6",
+    plot_experiment_4(names=["exp_8_a_com_3c_middle", "exp_8_b_com_3c_middle", "exp_8_c_com_3v_middle","exp_8_d_com_3v_middle" ],baselines=[None,0.05,None],dir="exp8",real_names=["coop i", "coop ii", "r4c i", "r4c ii"]),
+    plot_experiment_4(names=["exp_7_a_no_com_r_middle", "exp_7_b_no_com_r_harder", "exp_7_c_no_com_r_hard"],baselines=[None,None,None],dir="exp7",
+                      real_names=["medium", "hard", "very hard"])

@@ -165,6 +165,7 @@ class SACConfig(Config):
     BATCHES_PER_EPOCH = 8
     PRE_SAMPLING_STEPS = 10000
     TARGET_ENTROPY = 1.
+    LEARN_TEMPERATURE = False #likely to contain bugs
 
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
@@ -173,7 +174,7 @@ class SACConfig(Config):
 
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network):
         return SACTrainer(environment=env, from_save=self.FROM_SAVE,
-                          agent_ids=env.stats.agent_ids,
+                          agent_ids=env.stats.agent_ids,learn_temperature=self.LEARN_TEMPERATURE,
                           state_dim=(env.stats.observation_dimension,), action_dim=env.stats.action_dimension,
                           run_name=self.name,plotting=self.PLOTTING,
                           max_replay_buffer_size=self.MAX_REPLAY_BUFFER_SIZE,
