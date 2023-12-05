@@ -24,54 +24,57 @@ For the different algorithms there are different subclasses of this class with c
 the config.
 """
 class Config(Protocol):
-    name: str = None
-    VISIBLE_POSITIONS: Callable = None
-    PLOTTING: bool = True
+    name: str = None # identifier for the experiment
+    VISIBLE_POSITIONS: Callable = None # has to be set by make_config. See domain.py for examples
+    PLOTTING: bool = True # whether to plot the metrics
 
     # training
     EPOCHS = 2000
     SEED = 25
-    ENV_PARALLEL = 32
-    FROM_SAVE = False
+    ENV_PARALLEL = 32 # number of parallel environments during sampling
+    FROM_SAVE = False # if true, use existing model and logger files
 
     # Agent.py
-    COM_ALPHA = -0.0
-    MOV_ALPHA = 0.18
-    GAMMA = 0.99
-    TAU = 0.005
-    LEARNING_RATE = 0.0001
-    RECURRENT = True
-    EPSILON = None
+    COM_ALPHA = -0.0 # entropy regularization weight for communication actions
+    MOV_ALPHA = 0.18 # entropy regularization weight for movement actions
+    GAMMA = 0.99 # time discount factor
+    TAU = 0.005 # polyak averaging factor
+    LEARNING_RATE = 0.0001 # learning rate for both actor and critic
+    RECURRENT = True # whether to use a recurrent network. Recommended
+    EPSILON = None # epsilon for the epsilon greedy policy for the communication actions. None means no epsilon greedy policy which is recommended
 
-    SOCIAL_INFLUENCE_SAMPLE_SIZE = 30
-    SOCIAL_REWARD_WEIGHT = 0
+    SOCIAL_INFLUENCE_SAMPLE_SIZE = 30 # number of communication samples to generate to compute the social influence
+    SOCIAL_REWARD_WEIGHT = 0 # weight of the social reward (see Jacques et.al.). Recommended to be set to 0.
 
     # ExperienceReplayBuffer.py
-    BATCH_SIZE = 64
-    LSTM_TIME_STEPS = 10
-    MAX_REPLAY_BUFFER_SIZE = 10000
+    BATCH_SIZE = 64 # batch size for training
+    LSTM_TIME_STEPS = 10 # number of time steps to unroll the LSTM for training
+    MAX_REPLAY_BUFFER_SIZE = 10000 # maximum size of the replay buffer. Only relevant for SAC
 
     # GenericMLPs1D.py
-    LAYER_SIZE = 32
-    LSTM_SIZE = 32
-    NUMBER_OF_BIG_LAYERS = 2
+    LAYER_SIZE = 32 # size of the hidden dense layers
+    LSTM_SIZE = 32 # size of the optional LSTM layer
+    NUMBER_OF_BIG_LAYERS = 2 # number of hidden dense + LSTM layers
 
 
     # environment
     WORLD_GENERATOR = "random"  # multi or random or choice
-    GRID_SIZE_RANGE = (12, 16)
-    MAX_TIME_STEP = 30
-    NUMBER_OF_AGENTS = 2
-    COMMUNISM = False
-    AGENT_DROPOUT_PROBS = 0  # 0.5 if NUMBER_OF_AGENTS == 3 else 0  # meaning with 0.5 probabilty the third agent is not placed
-    NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6)
-    OBJECT_COLOR_RANGE = (1, 4)
-    POS_REWARD = 1
-    NEG_REWARD = -0.05
+    NUMBER_OF_AGENTS = 2 # number of agents in the environment
+    COMMUNISM = False # whether the agents share the same reward. Note that they share the maximum, not the sum or the average
+    OBJECT_COLOR_RANGE = (1, 4) # the second value is the total number of colors. For the random variant: Each episode a value from this range will be sampled and used as number of colors in this episode.
+    POS_REWARD = 1 # reward for cooperating
+    XENIA_LOCK = True # if true, the agents remember the last visited color and cooperation will happen if the remembered colors of two agents are the same.
+    XENIA_PERMANENCE = True # if true and Xenia_Lock is used, the agents will remember the first visited color and can only cooperate with other agents that select the same color as first. Recommended for the choice variant
+    REWARD_TYPE = "race" # the type of reward computer used (see environment/reward.py)
+
+    # random
+    GRID_SIZE_RANGE = (12, 16) # enviroment instances will be of a sampled size from this range
+    MAX_TIME_STEP = 30 # maximum number of time steps before the episode is truncated
+    AGENT_DROPOUT_PROBS = 0  # probability that one of the agents will be removed for an episode.
+    NUMBER_OF_OBJECTS_TO_PLACE_RANGE = (0.2, 0.6) # every episode a value from this range will be sampled and used as fraction how many cells will have objects.
+    NEG_REWARD = -0.05 # reward for every time step without cooperation
+
     CHOICE_NEG_REWARD = 0.
-    REWARD_TYPE = "race"
-    XENIA_LOCK = True
-    XENIA_PERMANENCE = True
 
     # input
     NUMBER_COMMUNICATION_CHANNELS = 0
@@ -137,14 +140,13 @@ class Config(Protocol):
 
         self.trainer = self.get_trainer(env=env, policy_network=policy_network, value_network=value_network)
         self.save()
-        tr_result= self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
-        print(tr_result)
-        return tr_result
+        train_result= self.trainer.train(render=RENDER, num_epochs=self.EPOCHS)
+        print(train_result)
+        return train_result
 
     @abstractmethod
     def save(self):
         ...
-
 
     @abstractmethod
     def get_trainer(self, env: CoopGridWorld, policy_network, value_network) -> Trainer:
@@ -163,8 +165,8 @@ class SACConfig(Config):
     ACTOR_OUTPUT_ACTIVATION = "softmax"
     ENVIRONMENT_STEPS_PER_EPOCH = 500
     BATCHES_PER_EPOCH = 8
-    PRE_SAMPLING_STEPS = 10000
-    TARGET_ENTROPY = 1.
+    PRE_SAMPLING_STEPS = 10000 # number of steps to sample before training to fill up the replay buffer
+    TARGET_ENTROPY = 1. # relevant for temperature learning
     LEARN_TEMPERATURE = False #likely to contain bugs
 
     def __init__(self, params: Dict[str, Any]):
@@ -204,12 +206,12 @@ class SACConfig(Config):
 
 
 class PPOConfig(Config):
-    PPO_EPSILON = 0.2
-    GAE_LAMBDA = 0.95
-    KLD_THRESHHOLD = 0.05
-    STEPS_PER_EPOCH = 1000
+    PPO_EPSILON = 0.2 # value clipping
+    GAE_LAMBDA = 0.95 # generalized advantage estimation moving average
+    KLD_THRESHHOLD = 0.05 # kl divergence between old and new policy used as early stopping criterion per epoch
+    STEPS_PER_EPOCH = 1000 # number of environment steps per epoch
     ACTOR_OUTPUT_ACTIVATION = "log_softmax"
-    PREDICT_GOAL_ONLY_AT_END: bool = False
+    PREDICT_GOAL_ONLY_AT_END: bool = False # if true, the probe classifiers are only trained at the end of the training
 
     def __init__(self, params: Dict[str, Any]):
         for key, value in params.items():
@@ -245,6 +247,12 @@ class PPOConfig(Config):
     def critic_output_dim(self, env: CoopGridWorld)->int:
         return self.NUMBER_OF_AGENTS
 
+"""
+Helper class to define configs.
+name: name of the experiment/config. Has to be unique or plots and logs will be overwritten
+algo: "sac" or "ppo"
+special_vars: dict of variables that should be overwritten in the config
+"""
 def make_config(name: str, algo: str, special_vars: Dict[str, Any]):
         params = {"name": name, "VISIBLE_POSITIONS": visible_positions_13}
         params.update(special_vars)
