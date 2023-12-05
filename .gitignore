@@ -1,5 +1,4 @@
 .idea
-*.png
 model
 logs
 logger
