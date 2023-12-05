@@ -16,11 +16,12 @@ def register_previous(optimizer: BayesianOptimization):
     #path = Path("logger/")
     all = defaultdict(list)
     for file in os.listdir(path):
-        if not file.startswith("hpo_exp_3"):
+        if not file.startswith("hpo_exp_3") or file.endswith(".json"):
             continue
         logger = LossLogger(file.rsplit("_logger",maxsplit=1)[0])
         logger.load(path=str(path))
-        #plot_multiple(run_name=file, values=logger.all_smoothed(), epoch=2000)
+        if file.endswith("_logger_is_smoothed.npz"):
+            plot_multiple(run_name=file, values=logger.all_smoothed(), epoch=2000)
         result = logger.avg_last(identifier="test_return", n=20)
         file_parts = file.split("_")
         params = {}
@@ -74,8 +75,8 @@ optimizer = BayesianOptimization(
     verbose=2,
     random_state=1,
 )
-#register_previous(optimizer=optimizer)
-optimizer.probe(params={'batch_size_exp': 4.728153365314442, 'com_alpha': 0.11757430125923729, 'gamma_inverse_exp': -3.207587067368291, 'layer_size': 89.269191843384, 'learning_rate_exp': -3.51338169310327, 'mov_alpha': 0.24444799937161088}, lazy=False)
+register_previous(optimizer=optimizer)
+#optimizer.probe(params={'batch_size_exp': 4.728153365314442, 'com_alpha': 0.11757430125923729, 'gamma_inverse_exp': -3.207587067368291, 'layer_size': 89.269191843384, 'learning_rate_exp': -3.51338169310327, 'mov_alpha': 0.24444799937161088}, lazy=False)
 optimizer.maximize(
     init_points=0,
     n_iter=0,

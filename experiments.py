@@ -36,7 +36,7 @@ epsilon_sampling = {"EPSILON": 0.1, "COM_ALPHA": 0.}
 medium_choice = {**choice_env(8,2, True),"NUMBER_COMMUNICATION_CHANNELS": 2}
 easy_choice = {**choice_env(4,2, True),"NUMBER_COMMUNICATION_CHANNELS": 1}
 exp_6 = [
-make_config("exp_9_a_com_easy_thomp", "ppo", {"SOCIAL_REWARD_WEIGHT":0.01,"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2,False),**thompson_sampling, "EPOCHS": 6000, "SEED":30}),
+make_config("exp_9_g_com_easy_thomp", "ppo", {"SOCIAL_REWARD_WEIGHT":100,"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2,False),**thompson_sampling, "EPOCHS": 6000, "SEED":30}),
 make_config("exp_9_b_com_easy_thomp", "ppo", {"SOCIAL_REWARD_WEIGHT":0.05,"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2,False),**thompson_sampling, "EPOCHS": 6000, "SEED":31}),
 make_config("exp_9_c_com_easy_thomp", "ppo", {"SOCIAL_REWARD_WEIGHT":0.1,"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2,False),**thompson_sampling, "EPOCHS": 6000, "SEED":32}),
 make_config("exp_9_d_com_easy_thomp", "ppo", {"SOCIAL_REWARD_WEIGHT":1,"COMMUNISM":True, "NUMBER_COMMUNICATION_CHANNELS": 1, **choice_env(4,2,False),**thompson_sampling, "EPOCHS": 6000, "SEED":33}),
