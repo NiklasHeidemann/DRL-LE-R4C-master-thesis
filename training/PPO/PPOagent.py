@@ -11,11 +11,13 @@ from training.Agent import Agent, EarlyStopping
 from training.ExperienceReplayBuffer import STATE_KEY, REWARD_KEY, ACTION_KEY
 from training.PPO.ExperienceReplayBuffer import ADVANTAGE_KEY, PROB_OLD_KEY
 
-
+"""
+Similar to the spinning ai documentation.
+Parameters are documented in the thesis and in runconfig.py.
+"""
 class PPOAgent(Agent):
 
 
-    #todo
     def __init__(self, environment_batcher, agent_ids: List[str], actor_network_generator, critic_network_generator,
                  ppo_epsilon: float,epsilon:Optional[float],
                  gamma: float, tau: float, alpha: float, com_alpha: float, social_reward_weight:float,
@@ -88,6 +90,9 @@ class PPOAgent(Agent):
             adv[t] = last_gae_lamda = delta + self._gamma * self._gae_lamda * next_non_terminal * last_gae_lamda
         return adv
 
+    """
+    used for rendering purposes and in sampling for the advantage estimation
+    """
     def get_values(self, states: tf.Tensor):
         reshaped_states = tf.reshape(states, (states.shape[0], self._environment_batcher._stats.recurrency, self._environment_batcher._stats.observation_dimension * len(self._agent_ids)))
         v1 = self._critic_1(reshaped_states)

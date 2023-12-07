@@ -15,7 +15,9 @@ from training.PPO.ExperienceReplayBuffer import PPOExperienceReplayBuffer, ADVAN
 from training.PPO.PPOagent import PPOAgent
 from training.Trainer import Trainer
 
-
+"""
+Controlling the class PPOAgent. Parameters are documented in the thesis and in runconfig.py.
+"""
 class PPOTrainer(Trainer):
 
     def __init__(self, environment, agent_ids: List[str], plotting:bool, state_dim, action_dim, from_save: bool,

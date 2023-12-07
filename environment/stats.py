@@ -4,7 +4,9 @@ import numpy as np
 
 from domain import ACTIONS
 
-
+"""
+Class handling all the parameters of an environment instance. Some will be constant over all episodes, others will change with each call of the generator.
+"""
 class Stats:
     grid_size: int = None
     number_of_agents: int = None

@@ -5,6 +5,11 @@ import numpy as np
 from environment.env import CoopGridWorld
 
 
+"""
+Class batching multiple environments together, such that reset and step work for all at once. 
+Still executes everything sequentially, so speedup only comes by batching tenserflow calls.
+Abides as close as possible to the gym-protocol.
+"""
 class EnvBatcher:
 
     def __init__(self, env: CoopGridWorld, batch_size: int):

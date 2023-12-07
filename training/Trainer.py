@@ -16,7 +16,10 @@ from training.ExperienceReplayBuffer import ExperienceReplayBuffer
 
 
 class Trainer(Protocol):
-
+    """
+    Wrapper of Agent.py, note that it is an abstract class.
+    Parameters are documented in the thesis and in runconfig.py.
+    """
     def _init(self, environment, agent: Agent, plotting: bool, replay_buffer: ExperienceReplayBuffer, run_name:str, from_save: bool, metrics: Dict[int,List[str]]):
         self._loss_logger = LossLogger(run_name=run_name)
         self._environment = environment

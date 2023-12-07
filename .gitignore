@@ -3,6 +3,7 @@ model
 logs
 logger
 saves/*
+runconfigs/*.json
 runconfigs/*
 runconfigs
 logger/*

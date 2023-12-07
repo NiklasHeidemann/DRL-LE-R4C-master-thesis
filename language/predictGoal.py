@@ -15,6 +15,10 @@ NUMBER_SAMPLES = 100
 MAX_ATTEMPTS = 400
 BATCH_SIZE = 40
 TEST_SIZE = 0.2
+
+"""
+Probe classifier predicting the color used in the cooperation based on the communication of the last 5 time steps.
+"""
 class TrainPredictGoal:
 
     def __init__(self, environment: CoopGridWorld):

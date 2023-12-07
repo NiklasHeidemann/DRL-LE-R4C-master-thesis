@@ -4,6 +4,7 @@ from plotly.graph_objs import Scatter
 
 from utils.loss_logger import LossLogger, TEST_RETURNS, SOCIAL_REWARD, PREDICTED_GOAL, RETURNS
 import plotly.express as px
+# code used for the creation of the plots in the thesis. Not intended to be reused, except as inspiration and for reproducibility.
 
 def plot_experiment_4(names: list[str], baselines: list[float|None], dir:str, real_names: list[str], vars=None, y_ranges=None, expname:str="",no_log:bool=False,fileapp:str=""):
     if vars is None:

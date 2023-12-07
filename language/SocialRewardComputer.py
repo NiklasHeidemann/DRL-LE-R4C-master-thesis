@@ -6,6 +6,9 @@ from domain import ACTIONS
 from environment.stats import Stats
 
 
+"""
+Handling the computation of the social influence metric (sometimes used as social reward). For details, see master thesis chapter 4.4 Metrics or the image in this folder.
+"""
 class SocialRewardComputer:
 
     def __init__(self, stats: Stats, social_influence_sample_size: int, num_agents: int, generators: tf.random.Generator,):

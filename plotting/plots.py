@@ -7,17 +7,21 @@ from plotly.graph_objs import Scatter
 from plotly.subplots import make_subplots
 
 
-def plot_returns(run_name: str, returns: Sequence[float], epoch:int, identifier: str ="returns")->Scatter:
-    returns = returns[:] # due to parallel processing
-    x = list(range(len(returns)))
+def plot_metric(run_name: str, values: Sequence[float], epoch:int, identifier: str = "returns")->Scatter:
+    values = values[:] # due to parallel processing
+    x = list(range(len(values)))
 
     # set the x label to specify how many epochs are between each x value
-    x_label = f"epoch\nvalues every {(len(returns)+2)//epoch} epochs" if len(returns) < epoch and epoch>0    else "epoch"
+    x_label = f"epoch\nvalues every {(len(values) + 2) // epoch} epochs" if len(values) < epoch and epoch > 0    else "epoch"
 
-    fig = px.line(x=x, y=returns, title=f"Smoothed {identifier} after {epoch} epochs", labels={"x":x_label, "y":f"Smoothed {identifier}"})
+    fig = px.line(x=x, y=values, title=f"Smoothed {identifier} after {epoch} epochs", labels={"x":x_label, "y": f"Smoothed {identifier}"})
 
     fig.write_image(f"plots/{run_name}_{identifier}.png")
-    return Scatter(x=x, y=returns)
+    return Scatter(x=x, y=values)
+
+"""
+Creates both single plots for the metrics and one __all plot with all metrics in one plot.
+"""
 def plot_multiple(run_name: str, values: Mapping[str, Sequence[float]], epoch: int)->None:
     size = math.ceil(math.sqrt(len(values)))
     main_fig = make_subplots(rows=size, cols=size, subplot_titles=list(values.keys()))
@@ -25,7 +29,7 @@ def plot_multiple(run_name: str, values: Mapping[str, Sequence[float]], epoch: i
     for identifier, returns in values.items():
         if len(returns) == 0:
             continue
-        fig = plot_returns(run_name=run_name, returns=returns, identifier=identifier, epoch=epoch)
+        fig = plot_metric(run_name=run_name, values=returns, identifier=identifier, epoch=epoch)
         main_fig.add_trace(fig, row=counter//size+1, col=counter%size+1)
         main_fig.update_xaxes(title_text="epoch", row=counter//size+1, col=counter%size+1)
         main_fig.update_yaxes(title_text=f"Smoothed {identifier}", row=counter//size+1, col=counter%size+1)

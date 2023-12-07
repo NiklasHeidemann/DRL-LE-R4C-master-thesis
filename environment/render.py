@@ -13,12 +13,8 @@ from environment.env import _map_communication_to_str
 if RENDER:
     window = pygame.display.set_mode((1000, 500))
     pygame.font.init()
-    image_paths: List[str] = ["./environment/images/garden.png", "./environment/images/music.png",
-                               "./environment/images/ocean.png", "./environment/images/thesis.png",
-                               "./environment/images/volcano.png"]
-    loaded_images = [pygame.image.load(image_path) for image_path in image_paths]
 
-SAC = False
+SAC = False # show attributes well for SAC or PPO
 
 def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index: int,
            max_q_value: Dict[str, Tuple[float, float]], log_dir: str):
@@ -31,15 +27,16 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
                    (255, 126, 0), (255, 0, 126), (255, 126, 126), (126, 255, 0), (126, 0, 255), (126, 255, 126),
                    (0, 255, 126), (0, 126, 255), (255, 255, 126), (255, 126, 255), (126, 255, 255)})
     default_cell_color = (220, 220, 220)
-    window.fill(background_color)  # fill background with color
-    # make draw calls
+    window.fill(background_color)
 
+    # grid with colors
     cell_size = min(50, 500 // len(grid))
     for row in range(len(grid)):
         for col in range(len(grid[0])):
             color = default_cell_color if sum(grid[row, col]) == 0 else cell_colors[grid[row, col].argmax()]
             pygame.draw.rect(surface=window, color=color, rect=(cell_size * col, cell_size * row, cell_size-1, cell_size-1))
 
+    # Action positions
     my_font = pygame.font.SysFont('Comic Sans MS', 30)
     for id, position in agent_positions.items():
         if position is not None:
@@ -50,6 +47,8 @@ def render(save: RenderSave, action_probs: np.ndarray, name: str, episode_index:
     pygame.draw.rect(surface=window, color=textfield_color, rect=(500, 0, 500, 500))
     text_field = my_font.render(f"timestep:     {timestep}", True, background_color)
     window.blit(text_field, (550, 20))
+
+    # additional agent info
     for index, (id, movement) in enumerate(last_agent_movements.items()):
         color = background_color if agents_locked[id] < 0 else cell_colors[agents_locked[id]]
         text_field = my_font.render(f"{id}:     {ACTIONS[np.argmax(movement)]}", True, color)
@@ -86,6 +85,9 @@ def render_episode(render_saves: List[RenderSaveExtended], name: str) -> None:
             time.sleep(0.01)
 
 
+"""
+Whenever there are items in the list (update the list in the main thread such that this thread can pop items from it), render the episodes one by one. Otherwise wait.
+"""
 def render_permanently(render_saves_as_list: List[List[RenderSaveExtended]]) -> None:
     clean_logs()
     counter = 0

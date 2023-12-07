@@ -3,6 +3,9 @@ from typing import Union, Dict, List, Optional
 import numpy as np
 import tensorflow as tf
 class ActionSampler:
+    """
+    Wrapper for any calls to the actor network that require sampling.
+    """
     
     def __init__(self, actor_uses_log_probs: bool, generators, actor: tf.keras.Model, epsilon: Optional[float]):
         self._actor = actor
@@ -40,9 +43,6 @@ class ActionSampler:
             else:
                 return actions_one_hot, probs
 
-    """
-    
-    """
     @tf.function
     def __call__(self, states, generator_index:int, deterministic=False):
         output_groups = self._actor(states) # first one for actions, rest for communication channels

@@ -23,49 +23,58 @@ class CoopGridWorld(gymnasium.Env):
     _communications: List[Dict[AgentID, np.ndarray]] = None
     _last_agent_actions: List[Dict[AgentID, str]] = None
     _last_observations: deque[np.ndarray] = None
-    _type: str = None
-    _xenia_lock: bool = None
-    _xenia_permanence: bool = None
-    _agents_locked: Dict[AgentID, int] = None
+    _type: str = None # env type name
+    _xenia_lock: bool = None # remember last visited color
+    _xenia_permanence: bool = None # remember first visited color, only if xenia_lock is true
+    _agents_locked: Dict[AgentID, int] = None # map remembered color to agent id
+
     def __init__(self, generator: WorldGenerator, compute_reward: ComputeReward, xenia_lock: bool, xenia_permanence: bool):
         self._generator = generator
         self._compute_reward = compute_reward
         self._xenia_lock = xenia_lock
         self._xenia_permanence = xenia_permanence
 
+
+    """
+    abides the gym-protocol
+    """
     def reset(self, seed: Optional[int] = None, return_info: bool = False, options: Optional[dict] = None) -> Tuple[np.ndarray, Dict[str, Any]]:
         self._grid, self._agent_positions, self._stats, self._type = self._generator(last_stats=self._stats)
         self._communications = []
         self._last_agent_actions = [{agent_id:"-" for agent_id in self._stats.agent_ids}]
         self._communications.append({agent_id: DEFAULT_COMMUNCIATIONS(self._stats.size_vocabulary, self._stats.number_communication_channels) for agent_id in self._stats.agent_ids})
         self._agents_locked = {agent_id: -1 for agent_id in self._stats.agent_ids}
-        #self._last_observations = {agent_id: deque([self._obs_dict[agent_id]]*TIME_STEPS) for agent_id in self._stats.agent_ids }
-        self._last_observations = deque([self._obs_array]*self._stats.recurrency)
-        return self.obs, {}
+        self._last_observations = deque([self._observation_array] * self._stats.recurrency)
+        return self.observation, {}
 
 
-    def _obs_for_agent(self,agent_id: str)->np.ndarray:
+    def _observation_for_agent(self, agent_id: str)->np.ndarray:
         if self._agent_positions[agent_id] is None:
             return np.zeros(shape=(self._stats.observation_dimension))
         visible_positions = self.stats.visible_positions(self._agent_positions[agent_id])
         grid_observation = np.reshape(newshape=(-1,),a=np.array([self._grid[position] if self._is_valid_position(position) else (np.zeros(shape=(self._stats.values_per_field)) -1) for position in visible_positions]))
         communication_observation = np.concatenate([self._communications[-1][agent_id]]+[communication for com_agent_id, communication in self._communications[-1].items() if com_agent_id!=agent_id])
-        coordinates = np.array([self._agent_positions[agent_id][0]/len(self._grid), self._agent_positions[agent_id][1]/len(self._grid[0])])*0 #todo
+        coordinates = np.array([self._agent_positions[agent_id][0]/len(self._grid), self._agent_positions[agent_id][1]/len(self._grid[0])])*0 # coordinates are unused at the moment
         selected_colour = tf.one_hot(self._agents_locked[agent_id],depth=self.stats.values_per_field) if self._xenia_lock else np.zeros(shape=(self.stats.values_per_field))
         return np.concatenate([grid_observation, communication_observation, self._stats.stats_observation, coordinates, selected_colour])
 
-    def _is_valid_position(self, position: Tuple[int, int])->bool:
+    def _is_valid_position(self, position: tuple[int, int])->bool:
         return position[0]>=0 and position[0]<len(self._grid) and position[1]>=0 and position[1]<len(self._grid[0])
-    @property
-    def _obs_array(self)->np.ndarray:
-        return np.array([self._obs_for_agent(agent_id) for agent_id in self._stats.agent_ids])
 
     @property
-    def obs(self)->np.ndarray: # dimensions: TimeStep, AgentId, Observation
+    def _observation_array(self)->np.ndarray:
+        return np.array([self._observation_for_agent(agent_id) for agent_id in self._stats.agent_ids])
+
+    @property
+    def observation(self)->np.ndarray: # dimensions: TimeStep, AgentId, Observation
         return np.array(self._last_observations)
+
     def seed(self, seed=None):
         random.seed(seed)
 
+    """
+    abides by the gym-protcol
+    """
     def step(self,
              actions: np.ndarray # dimensions: AgentID, Action+Communication
              ) -> Tuple[
@@ -75,7 +84,7 @@ class CoopGridWorld(gymnasium.Env):
         self._communications.append({})
         self._last_agent_actions.append({})
         for index, agent_id in enumerate(self._stats.agent_ids):
-            if self._agent_positions[agent_id] is None:
+            if self._agent_positions[agent_id] is None: # e.g. if sometimes not all agents are placed in the world
                 self._last_agent_actions[-1][agent_id] = actions[index,:len(ACTIONS)]
                 self._communications[-1][agent_id] = DEFAULT_COMMUNCIATIONS(self._stats.size_vocabulary, self._stats.number_communication_channels)
             else:
@@ -83,13 +92,13 @@ class CoopGridWorld(gymnasium.Env):
                 self._move_agent(agent_id=agent_id, movement=movement)
                 self._last_agent_actions[-1][agent_id]=movement
                 self._communications[-1][agent_id] = np.array(actions[index,len(ACTIONS):])
-        reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._agents_locked if self._xenia_lock else None)
+        reward_array = self._compute_reward(grid=self._grid, agent_positions=self._agent_positions, stats=self._stats, agents_locked = self._get_agent_colors())
         is_terminated = max(reward_array)>0
         is_truncated = (not is_terminated) and self._stats.time_step >= self._stats.max_time_step
-        self._last_observations.append(self._obs_array)
+        self._last_observations.append(self._observation_array)
         self._last_observations.popleft()
         return (
-            self.obs,
+            self.observation,
             reward_array,
             is_terminated,
             is_truncated,
@@ -129,9 +138,10 @@ class CoopGridWorld(gymnasium.Env):
     def stats(self)-> Stats:
         return self._stats
 
-    def _get_agent_colors(self)->Dict[AgentID, int]:
+    def _get_agent_colors(self)->dict[AgentID, int] | None:
         if self._xenia_lock:
             return self._agents_locked
+        return None
     def _map_cell_to_char(self, pos: Tuple[int, int])->str:
         agent_on_spot = pos in self._agent_positions.values()
         cell = self._grid[pos]

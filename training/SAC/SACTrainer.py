@@ -18,6 +18,10 @@ from training.SAC.SACagent import SACAgent
 from training.Trainer import Trainer
 
 
+"""
+Handling the SACAgent
+Parameters are documented in the thesis and in runconfig.py.
+"""
 class SACTrainer(Trainer):
     def __init__(self, environment, agent_ids: List[str], state_dim, action_dim, from_save: bool,
                  actor_network_generator, critic_network_generator, max_replay_buffer_size: int, gamma: float, mov_alpha: float, com_alpha: float, env_parallel: int, seed: int, run_name: str,

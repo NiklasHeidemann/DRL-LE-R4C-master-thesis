@@ -14,6 +14,10 @@ from training.ExperienceReplayBuffer import STATE_KEY, ACTION_KEY, REWARD_KEY
 from training.SAC.ExperienceReplayBuffer import DONE_KEY, STATE_PRIME_KEY
 
 
+"""
+Similar to the spinning ai documentation.
+Parameters are documented in the thesis and in runconfig.py.
+"""
 class SACAgent(Agent):
 
     def __init__(self, environment, agent_ids: List[str], actor_network_generator,
@@ -107,6 +111,9 @@ class SACAgent(Agent):
         return False, metrics
 
 
+    """
+    untested, likely contains bugs
+    """
     def train_step_temperature(self, states):
         action_probs = self._actor(tf.reshape(states, shape=(
         self._batch_size * len(self._agent_ids), self._environment.stats.recurrency,

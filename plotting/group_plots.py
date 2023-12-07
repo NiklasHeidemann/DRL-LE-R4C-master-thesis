@@ -9,6 +9,11 @@ from plotly.subplots import make_subplots
 from utils.loss_logger import ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, \
     AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD, TEST_SOCIAL_RETURNS
 
+"""
+    method can be used to group all plots for one metric of differenc runs in one plot.
+    Just adapt root path and save path and the metric keys that you want to group.
+"""
+
 ROOT_PATH = Path("/home/nemo/pycharmProjects/adversarial/experiments/exp4")
 SAVE_PATH = Path("/home/nemo/pycharmProjects/adversarial/experiments/exp4")
 KEYS = [TEST_RETURNS]#[ACTOR_LOSS, CRITIC_LOSS, COM_ENTROPY, RETURNS, V_VALUES, STD_ADVANTAGE, TEST_RETURNS, AVG_ADVANTAGE, KLD, PREDICTED_GOAL, SOCIAL_REWARD, TEST_SOCIAL_RETURNS]
